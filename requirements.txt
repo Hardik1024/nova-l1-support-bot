@@ -1,0 +1,10 @@
+streamlit
+langchain
+langchain-core
+langchain-google-genai
+google-generativeai
+python-dotenv
+pypdf
+python-docx
+psutil
+requests

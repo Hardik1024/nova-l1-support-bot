@@ -1,0 +1,15 @@
+Delhi: 32°C, Sunny
+Mumbai: 29°C, Cloudy
+Bengaluru: 24°C, Partly Cloudy
+Chennai: 31°C, Sunny
+Kolkata: 30°C, Humid
+Hyderabad: 28°C, Clear
+Gurugram: 31°C, Sunny
+Noida: 32°C, Clear
+Pune: 27°C, Cloudy
+Jaipur: 34°C, Sunny
+London: 18°C, Rainy
+New York: 25°C, Clear
+Dubai: 38°C, Sunny
+Singapore: 30°C, Cloudy
+Sydney: 17°C, Partly Cloudy

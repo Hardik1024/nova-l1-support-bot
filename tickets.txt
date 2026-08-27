@@ -1,0 +1,77 @@
+
+Ticket ID: TKT-20260821172457
+Created: 21 August 2026, 05:24:57 PM
+Problem: Laptop screen is broken
+Device: Laptop
+Application: N/A
+Error: None
+Impact: High - unable to use the device
+Troubleshooting: None (physical hardware damage)
+Priority: High
+----------------------------------------
+
+Ticket ID: TKT-20260821173107
+Created: 21 August 2026, 05:31:07 PM
+Problem: Laptop screen is physically broken
+Device: Laptop
+Application: N/A
+Error: None
+Impact: High - user cannot use the device
+Troubleshooting: None performed (physical damage)
+Priority: High
+----------------------------------------
+
+Ticket ID: TKT-20260821173817
+Created: 21 August 2026, 05:38:17 PM
+Problem: Laptop stopped working and shut down completely
+Device: Mac laptop
+Application: N/A
+Error: None
+Impact: User is unable to work (shut down completely)
+Troubleshooting: Tried turning it on / checked power state
+Priority: Medium
+----------------------------------------
+
+Ticket ID: TKT-20260821174839
+Created: 21 August 2026, 05:48:39 PM
+Problem: Wi-Fi not working, unable to connect to network
+Device: Mac
+Application: Wi-Fi / Network
+Error: Unable to connect
+Impact: High - preventing user from working entirely
+Troubleshooting: Toggled Wi-Fi, restarted Mac, forgot network, none of the troubleshooting steps worked.
+Priority: High
+----------------------------------------
+
+Ticket ID: TKT-20260821175654
+Created: 21 August 2026, 05:56:54 PM
+Problem: Unable to connect to Wi-Fi
+Device: Windows PC
+Application: Wi-Fi
+Error: None
+Impact: Cannot access the internet
+Troubleshooting: Toggled Wi-Fi off and on, restarted the computer, checked for airplane mode
+Priority: Low
+----------------------------------------
+
+Ticket ID: TKT-20260825134033
+Created: 25 August 2026, 01:40:33 PM
+Problem: Laptop is freezing frequently due to high RAM usage
+Device: Dell G3
+Application: Operating System
+Error: High RAM usage leading to frequent freezing
+Impact: Low impact on work
+Troubleshooting: Hard restart performed, checked Task Manager, identified high RAM usage (88.8%).
+Priority: Low
+----------------------------------------
+
+Ticket ID: TKT-20260825134129
+Created: 25 August 2026, 01:41:29 PM
+Problem: Laptop freezing too much
+Device: Dell G3
+Application: Operating System / General
+Error: High RAM usage (around 88%)
+Impact: Low
+Troubleshooting: Hard restart, checked Task Manager and RAM usage
+Priority: Low
+----------------------------------------
