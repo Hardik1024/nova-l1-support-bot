@@ -20,9 +20,13 @@ JIRA_ISSUE_TYPE=os.getenv("JIRA_ISSUE_TYPE","Task")
 
 @tool
 def get_current_datetime():
-    """Get the current system date and time."""
-    return datetime.now().astimezone().strftime(
-        "%A, %d %B %Y, %I:%M:%S %p %Z"
+    """Get the current date and time in India."""
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(
+        ZoneInfo("Asia/Kolkata")
+    ).strftime(
+        "%A, %d %B %Y, %I:%M:%S %p IST"
     )
 
 @tool
