@@ -17,8 +17,6 @@ if "chats_dictionary" not in st.session_state:
 
 chats_dictionary = st.session_state.chats_dictionary
 
-chats_dictionary = get_chat_database()
-
 if "current_chat_id" not in st.session_state:
     if chats_dictionary:
         st.session_state.current_chat_id = list(chats_dictionary.keys())[-1]
