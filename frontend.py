@@ -12,9 +12,10 @@ st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
 # ==========================================
 # CHAT DATABASE
 # ==========================================
-@st.cache_resource
-def get_chat_database():
-    return {}
+if "chats_dictionary" not in st.session_state:
+    st.session_state.chats_dictionary = {}
+
+chats_dictionary = st.session_state.chats_dictionary
 
 chats_dictionary = get_chat_database()
 
