@@ -63,25 +63,11 @@ def get_system_info():
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage(os.path.abspath(os.sep))
     cpu = psutil.cpu_percent(interval=1)
-
-    return f"""
-[Nova Cloud Server Diagnostics]
-Operating System: {platform.system()} {platform.release()}
-CPU Usage: {cpu}%
-RAM Usage: {memory.percent}%
-Free RAM: {round(memory.available/(1024**3),2)} GB
-"""
+    return f"\n[Nova Cloud Server Diagnostics]\nOperating System: {platform.system()} {platform.release()}\nCPU Usage: {cpu}%\nRAM Usage: {memory.percent}%\nFree RAM: {round(memory.available/(1024**3),2)} GB\n"
 
 def jira_request(method,url,data=None):
     try:
-        response=requests.request(
-            method,
-            f"{JIRA_BASE_URL}{url}",
-            auth=(JIRA_EMAIL,JIRA_API_TOKEN),
-            headers={"Accept":"application/json", "Content-Type":"application/json"},
-            json=data,
-            timeout=30
-        )
+        response=requests.request(method, f"{JIRA_BASE_URL}{url}", auth=(JIRA_EMAIL,JIRA_API_TOKEN), headers={"Accept":"application/json", "Content-Type":"application/json"}, json=data, timeout=30)
         return response
     except Exception:
         return None
@@ -90,18 +76,7 @@ def jira_request(method,url,data=None):
 def create_ticket(problem_summary, device, application, error_message, impact, troubleshooting, priority):
     """Create an IT support ticket in Jira."""
     description=f"Problem: {problem_summary}\nDevice: {device}\nApplication: {application}\nError: {error_message}\nImpact: {impact}\nTroubleshooting: {troubleshooting}"
-    data={
-        "fields":{
-            "project":{"key":JIRA_PROJECT_KEY},
-            "summary":problem_summary,
-            "description":{
-                "type":"doc", "version":1,
-                "content":[{"type":"paragraph", "content":[{"type":"text", "text":description}]}]
-            },
-            "issuetype":{"name":JIRA_ISSUE_TYPE},
-            "priority":{"name":priority}
-        }
-    }
+    data={"fields":{"project":{"key":JIRA_PROJECT_KEY},"summary":problem_summary,"description":{"type":"doc", "version":1, "content":[{"type":"paragraph", "content":[{"type":"text", "text":description}]}]},"issuetype":{"name":JIRA_ISSUE_TYPE},"priority":{"name":priority}}}
     response=jira_request("POST", "/rest/api/3/issue", data)
     if response and response.status_code==201:
         ticket_id=response.json()["key"]
@@ -127,32 +102,21 @@ def search_tickets(search_text):
         issues=response.json().get("issues",[])
         if not issues: return "No matching tickets found."
         result="Matching tickets:\n"
-        for issue in issues:
-            result+=f'\n{issue["key"]} | {issue["fields"].get("summary","")} | {issue["fields"].get("status",{}).get("name","")}'
+        for issue in issues: result+=f'\n{issue["key"]} | {issue["fields"].get("summary","")} | {issue["fields"].get("status",{}).get("name","")}'
         return result
     return "Unable to search tickets."
 
 @tool
 def list_all_tickets():
     """Fetch a broad list of all recent available tickets in the Jira system."""
-    data={
-        "jql":f'project = "{JIRA_PROJECT_KEY}" ORDER BY created DESC',
-        "maxResults": 15, # Capped at 15 to prevent token limits from crashing the app
-        "fields":["summary","status","priority"]
-    }
+    data={"jql":f'project = "{JIRA_PROJECT_KEY}" ORDER BY created DESC', "maxResults": 15, "fields":["summary","status","priority"]}
     response=jira_request("POST", "/rest/api/3/search/jql", data)
-    
     if response and response.status_code==200:
         issues = response.json().get("issues",[])
-        if not issues:
-            return "There are currently no tickets in the system."
-            
+        if not issues: return "There are currently no tickets in the system."
         result="Here are the most recent tickets in the system:\n"
-        for issue in issues:
-            fields=issue["fields"]
-            result+=f'\n- **{issue["key"]}**: {fields.get("summary","")} (Status: {fields.get("status",{}).get("name","")})'
+        for issue in issues: result+=f'\n- **{issue["key"]}**: {issue["fields"].get("summary","")} (Status: {issue["fields"].get("status",{}).get("name","")})'
         return result
-        
     return "Unable to fetch the list of tickets."
 
 @tool
@@ -161,10 +125,8 @@ def update_ticket(ticket_id,summary="",priority="",description=""):
     fields={}
     if summary: fields["summary"]=summary
     if priority: fields["priority"]={"name":priority}
-    if description:
-        fields["description"]={"type":"doc", "version":1, "content":[{"type":"paragraph", "content":[{"type":"text", "text":description}]}]}
+    if description: fields["description"]={"type":"doc", "version":1, "content":[{"type":"paragraph", "content":[{"type":"text", "text":description}]}]}
     if not fields: return "Nothing to update."
-    
     ticket_id=ticket_id.strip().upper()
     response=jira_request("PUT", f"/rest/api/3/issue/{ticket_id}", {"fields":fields})
     if response and response.status_code==204: return f"Ticket {ticket_id} updated successfully."
@@ -178,15 +140,16 @@ def delete_ticket(ticket_id):
     if response and response.status_code==204: return f"Ticket {ticket_id} deleted successfully."
     return "Unable to delete ticket."
 
+
+# 🚨 UPDATED GUARDRAILS: Added LLM Suggestion Logic 🚨
 SYSTEM_INSTRUCTION="""
 You are an L1 Technical Support Agent for an IT helpdesk.
 Your main job is to help with IT-related problems only.
 
 RESPONSE STYLE & TONE (CRITICAL - MIDDLE GROUND):
 - Use a clear, balanced "middle ground" tone. 
-- Your explanations must be easy to understand for beginners, but retain accurate technical terms for advanced users.
-- If you introduce a technical concept (e.g., DNS, Cache, RAM), briefly explain it in simple words without being patronizing.
-- Be polite, professional, and practical.
+- Explanations must be easy to understand for beginners, but retain accurate technical terms for advanced users.
+- If you introduce a technical concept (e.g., DNS, Cache, RAM), briefly explain it in simple words.
 - Keep troubleshooting short. Give clear, step-by-step instructions.
 
 TOOL_REQUEST:
@@ -196,24 +159,31 @@ TOOL_REQUEST:
 - If the user asks about their OWN personal computer's specs, DO NOT use the get_system_info tool. Give manual instructions. 
 - ONLY use get_system_info if the user explicitly asks about the "cloud server".
 
-IT_ISSUE:
+IT_ISSUE & ESCALATION:
 Help with basic IT problems. Identify symptoms and error messages.
 Ask useful follow-up questions if info is missing. Do not suggest actions requiring admin, L2 or L3 access.
-
-IMAGE/VISION ANALYSIS:
-If the user uploads an image (like a screenshot of an error), analyze it closely. Read any text or error codes visible in the image and use that to provide simple troubleshooting steps.
-
-ESCALATION:
 Do not immediately create a ticket. First collect: Problem, Device, Error, Impact.
 Then ask: "Would you like me to create an IT support ticket?"
 If they say YES, use create_ticket.
 
-JIRA_REQUEST:
-Use get_ticket, search_tickets, list_all_tickets, update_ticket, or delete_ticket based on user request.
-Never invent a Jira ticket ID. Ask for confirmation before deleting.
+SUGGESTED FOLLOW-UPS (CRITICAL RULE):
+At the very end of your response, you MAY provide 1 to 3 short suggested follow-up questions for the user to click.
 
-DOCUMENT_QUERY:
-If an uploaded document is unrelated to IT, politely decline. Do not auto-summarize unless asked.
+WHEN TO SHOW SUGGESTIONS:
+- After resolving an issue or giving instructions.
+- After returning data from Jira (e.g., suggest "Update this ticket" or "Search for other tickets").
+- After returning System Info.
+
+WHEN TO HIDE SUGGESTIONS (DO NOT ADD THEM):
+- If your response ends with a direct clarifying question to the user (e.g., "What device are you using?", "Would you like me to create a ticket?"). Do not distract them from answering your question.
+- After a simple greeting or off-topic rejection.
+
+FORMAT:
+If you decide to provide suggestions, append EXACTLY this format to the VERY END of your response. Use a maximum of 3 short questions.
+
+===SUGGESTIONS===
+- Suggestion 1
+- Suggestion 2
 """
 
 my_llm=ChatGoogleGenerativeAI(

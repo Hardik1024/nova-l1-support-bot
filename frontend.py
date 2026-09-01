@@ -3,6 +3,8 @@ import ll_backend
 import uuid
 import docx
 import base64
+import sqlite3
+import json
 from pypdf import PdfReader
 
 # ==========================================
@@ -11,14 +13,45 @@ from pypdf import PdfReader
 st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
 
 # ==========================================
-# MULTI-USER CHAT DATABASE (Survives Reloads)
+# SQLITE DATABASE SETUP
 # ==========================================
-@st.cache_resource
-def get_global_chat_db():
-    return {}
+def init_db():
+    conn = sqlite3.connect("nova_chats.db", check_same_thread=False)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS chats (session_id TEXT PRIMARY KEY, user_id TEXT, history TEXT)''')
+    conn.commit()
+    conn.close()
 
-global_db = get_global_chat_db()
+def get_user_chats(user_id):
+    conn = sqlite3.connect("nova_chats.db", check_same_thread=False)
+    c = conn.cursor()
+    c.execute("SELECT session_id, history FROM chats WHERE user_id=?", (user_id,))
+    rows = c.fetchall()
+    conn.close()
+    chats = {}
+    for row in rows:
+        chats[row[0]] = json.loads(row[1])
+    return chats
 
+def save_chat(session_id, user_id, history):
+    conn = sqlite3.connect("nova_chats.db", check_same_thread=False)
+    c = conn.cursor()
+    c.execute("REPLACE INTO chats (session_id, user_id, history) VALUES (?, ?, ?)", (session_id, user_id, json.dumps(history)))
+    conn.commit()
+    conn.close()
+
+def delete_chat(session_id):
+    conn = sqlite3.connect("nova_chats.db", check_same_thread=False)
+    c = conn.cursor()
+    c.execute("DELETE FROM chats WHERE session_id=?", (session_id,))
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# ==========================================
+# USER IDENTIFICATION
+# ==========================================
 if "user_id" not in st.query_params:
     new_user_id = str(uuid.uuid4())
     st.query_params["user_id"] = new_user_id
@@ -26,10 +59,7 @@ if "user_id" not in st.query_params:
 else:
     user_id = st.query_params["user_id"]
 
-if user_id not in global_db:
-    global_db[user_id] = {}
-
-chats_dictionary = global_db[user_id]
+chats_dictionary = get_user_chats(user_id)
 
 if "current_chat_id" not in st.session_state:
     if chats_dictionary:
@@ -51,97 +81,107 @@ with st.sidebar:
     st.write("Previous Chats:")
 
     for chat_id, history in list(chats_dictionary.items()):
-        if len(history) == 0:
-            continue
-
+        if len(history) == 0: continue
         chat_name = "New Chat"
         for message in history:
             if message["role"] == "user":
                 chat_name = message["content"][:15]
-                if len(message["content"]) > 15:
-                    chat_name += "..."
+                if len(message["content"]) > 15: chat_name += "..."
                 break
 
         col1, col2 = st.columns([8, 2])
-
         with col1:
             if st.button(chat_name, key=f"chat_{chat_id}", use_container_width=True):
                 st.session_state.current_chat_id = chat_id
                 st.rerun()
-
         with col2:
             if st.button("🗑️", key=f"del_{chat_id}"):
+                delete_chat(chat_id)
                 del chats_dictionary[chat_id]
-
                 if st.session_state.current_chat_id == chat_id:
-                    valid_chats = [cid for cid, history in chats_dictionary.items() if len(history) > 0]
-                    if valid_chats:
-                        st.session_state.current_chat_id = valid_chats[-1]
-                    else:
-                        st.session_state.current_chat_id = "PENDING"
+                    valid_chats = [cid for cid, hist in chats_dictionary.items() if len(hist) > 0]
+                    st.session_state.current_chat_id = valid_chats[-1] if valid_chats else "PENDING"
                 st.rerun()
 
 # ==========================================
 # MAIN CHAT WINDOW
 # ==========================================
 active_id = st.session_state.current_chat_id
-
 if active_id == "PENDING":
     active_history = []
 else:
-    if active_id not in chats_dictionary:
-        chats_dictionary[active_id] = []
+    if active_id not in chats_dictionary: chats_dictionary[active_id] = []
     active_history = chats_dictionary[active_id]
 
 chat_box = st.container()
 
 with chat_box:
-    
     if len(active_history) == 0:
         st.markdown("<br><br><br><br>", unsafe_allow_html=True)
         st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>How can I help you?</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; font-size: 18px;'><b>Ask me about IT issues, upload a screenshot, or manage tickets.</b></p>", unsafe_allow_html=True)
         st.markdown("<br><br><br>", unsafe_allow_html=True)
-        
     else:
         for msg in active_history:
             with st.chat_message(msg["role"]):
-                
-                # Render uploaded files/images in chat history
                 if "file_name" in msg:
                     st.caption(f"**Attached File:** {msg['file_name']}")
                 if "image_base64" in msg:
-                    # Decode and display the image
-                    image_bytes = base64.b64decode(msg["image_base64"])
-                    st.image(image_bytes, width=300)
-
+                    st.image(base64.b64decode(msg["image_base64"]), width=300)
                 if msg["role"] == "assistant" and msg.get("tools"):
                     with st.expander("Tools used", expanded=False):
-                        for tool_name in msg["tools"]:
-                            st.write(tool_name)
-
+                        for tool_name in msg["tools"]: st.write(tool_name)
+                
+                # 🚨 Hide the secret suggestions tag from past chat history
+                display_text = msg["content"].split("===SUGGESTIONS===")[0].strip()
+                
                 if msg["role"] == "user":
-                    st.markdown(msg["content"].replace("\n", "  \n"))
+                    st.markdown(display_text.replace("\n", "  \n"))
                 else:
-                    st.markdown(msg["content"])
+                    st.markdown(display_text)
 
 # ==========================================
-# USER INPUT & FILE HANDLING (Now with Images)
+# SUGGESTION BUTTONS UI
 # ==========================================
-user_input = st.chat_input(
-    "Ask Nova",
-    accept_file=True,
-    file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"]
-)
+suggestion_clicked = None
 
-if user_input:
-    user_text = user_input.text.strip()
-    uploaded_files = user_input.files
+# Only show suggestions for the very last message in the chat
+if active_history and active_history[-1]["role"] == "assistant":
+    last_msg = active_history[-1]["content"]
+    if "===SUGGESTIONS===" in last_msg:
+        sug_text = last_msg.split("===SUGGESTIONS===")[1].strip()
+        # Clean up the AI's bullet points
+        suggestions = [s.strip("- 1234567890.*") for s in sug_text.split("\n") if s.strip()]
+        
+        if suggestions:
+            st.markdown("<br>", unsafe_allow_html=True)
+            cols = st.columns(len(suggestions))
+            for i, sug in enumerate(suggestions):
+                if i < len(cols):
+                    if cols[i].button(sug, use_container_width=True):
+                        suggestion_clicked = sug
+
+# ==========================================
+# USER INPUT & FILE HANDLING
+# ==========================================
+user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
+
+# Check if user typed something OR clicked a suggestion button
+if user_input or suggestion_clicked:
+    user_text = ""
+    uploaded_files = []
+
+    if user_input:
+        user_text = user_input.text.strip()
+        uploaded_files = user_input.files
+    elif suggestion_clicked:
+        user_text = suggestion_clicked
 
     if st.session_state.current_chat_id == "PENDING":
         new_id = str(uuid.uuid4())[:6]
         chats_dictionary[new_id] = []
         st.session_state.current_chat_id = new_id
+        active_id = new_id
         active_history = chats_dictionary[new_id]
 
     file_name = None
@@ -153,7 +193,6 @@ if user_input:
         file_name = uploaded_file.name
         ext = file_name.split('.')[-1].lower()
 
-        # Handle Documents
         if ext == "docx":
             doc = docx.Document(uploaded_file)
             extracted_text = "\n".join(paragraph.text for paragraph in doc.paragraphs)
@@ -161,46 +200,32 @@ if user_input:
             pdf_reader = PdfReader(uploaded_file)
             for page in pdf_reader.pages:
                 page_text = page.extract_text()
-                if page_text:
-                    extracted_text += page_text + "\n"
-        
-        # Handle Images
+                if page_text: extracted_text += page_text + "\n"
         elif ext in ["png", "jpg", "jpeg", "webp"]:
             image_bytes = uploaded_file.read()
             image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    # Render current message instantly
     with chat_box:
         with st.chat_message("user"):
-            if file_name and not image_base64:
-                st.caption(f"**Attached File:** {file_name}")
-            if image_base64:
-                st.image(base64.b64decode(image_base64), width=300)
-            if user_text:
-                st.markdown(user_text.replace("\n", "  \n"))
+            if file_name and not image_base64: st.caption(f"**Attached File:** {file_name}")
+            if image_base64: st.image(base64.b64decode(image_base64), width=300)
+            if user_text: st.markdown(user_text.replace("\n", "  \n"))
 
-    # Generate text for empty submissions
     if file_name and not user_text:
         user_text = "Please analyze this attached file/image."
 
-    # Save to history
-    user_message_data = {
-        "role": "user",
-        "content": user_text
-    }
-    if file_name:
-        user_message_data["file_name"] = file_name
-    if image_base64:
-        user_message_data["image_base64"] = image_base64
+    user_message_data = {"role": "user", "content": user_text}
+    if file_name: user_message_data["file_name"] = file_name
+    if image_base64: user_message_data["image_base64"] = image_base64
 
     active_history.append(user_message_data)
+    save_chat(active_id, user_id, active_history)
 
     # ----------------------------------------
     # USER PROMPT + TOOL STREAMING
     # ----------------------------------------
     with chat_box:
         with st.chat_message("assistant"):
-
             tool_box = st.empty()
             answer_box = st.empty()
             tools_used = []
@@ -225,21 +250,19 @@ if user_input:
                         text = item.get("content", "")
                         if text:
                             bot_answer += text
-                            answer_box.markdown(bot_answer)
+                            # 🚨 Hide suggestions while the AI is live-typing
+                            display_answer = bot_answer.split("===SUGGESTIONS===")[0].strip()
+                            answer_box.markdown(display_answer)
 
             if tools_used:
                 tool_box.empty()
                 with st.expander("Tools used", expanded=False):
-                    for tool_name in tools_used:
-                        st.write(tool_name)
+                    for tool_name in tools_used: st.write(tool_name)
 
-    assistant_message = {
-        "role": "assistant",
-        "content": bot_answer
-    }
-
-    if tools_used:
-        assistant_message["tools"] = tools_used
+    assistant_message = {"role": "assistant", "content": bot_answer}
+    if tools_used: assistant_message["tools"] = tools_used
 
     active_history.append(assistant_message)
+    save_chat(active_id, user_id, active_history)
+    
     st.rerun()
