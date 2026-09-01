@@ -31,26 +31,38 @@ def get_current_datetime():
 
 @tool
 def get_weather(city):
-    """Get weather information for a city from weather.txt."""
+    """Get weather information for a city from weather data."""
+    dir_path = os.path.dirname(os.path.abspath(__file__))
+    file_path = None
+    
+    try:
+        # Case insensitive search - finds Weather.txt, weather.txt, etc.
+        for filename in os.listdir(dir_path):
+            if filename.lower() == "weather.txt":
+                file_path = os.path.join(dir_path, filename)
+                break
+                
+        # Cloud root fallback
+        if not file_path:
+            for filename in os.listdir(os.getcwd()):
+                if filename.lower() == "weather.txt":
+                    file_path = os.path.join(os.getcwd(), filename)
+                    break
+    except Exception:
+        pass
 
-    file_path=os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "weather.txt"
-    )
-
-    if not os.path.exists(file_path):
+    if not file_path or not os.path.exists(file_path):
         return "Weather data file not found."
 
-    with open(file_path,"r",encoding="utf-8") as file:
-        weather_data=file.readlines()
+    with open(file_path, "r", encoding="utf-8") as file:
+        weather_data = file.readlines()
 
-    city=city.strip().lower()
+    city = city.strip().lower()
 
     for line in weather_data:
         if ":" in line:
-            name,weather=line.split(":",1)
-
-            if name.strip().lower()==city:
+            name, weather = line.split(":", 1)
+            if name.strip().lower() == city:
                 return f"Weather in {name.strip()}: {weather.strip()}"
 
     return f"I don't have weather data for {city.title()}."
@@ -439,7 +451,8 @@ my_llm_with_tools=my_llm.bind_tools([
 def get_bot_response_stream(current_chat_history,user_text,file_text=""):
     messages=[SystemMessage(content=SYSTEM_INSTRUCTION)]
 
-    for msg in current_chat_history:
+    # 🚨 SLIDING WINDOW TOKEN REDUCER: Only inject the last 6 messages into the LLM memory
+    for msg in current_chat_history[-6:]:
         if msg["role"]=="user":
             if msg["content"]:
                 messages.append(

@@ -10,13 +10,30 @@ from pypdf import PdfReader
 st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
 
 # ==========================================
-# CHAT DATABASE
+# MULTI-USER CHAT DATABASE (Survives Reloads)
 # ==========================================
-if "chats_dictionary" not in st.session_state:
-    st.session_state.chats_dictionary = {}
+@st.cache_resource
+def get_global_chat_db():
+    # This global dictionary stays alive on the server across reloads
+    return {}
 
-chats_dictionary = st.session_state.chats_dictionary
+global_db = get_global_chat_db()
 
+# Identify the user via URL parameter to keep chats isolated but persistent
+if "user_id" not in st.query_params:
+    new_user_id = str(uuid.uuid4())
+    st.query_params["user_id"] = new_user_id
+    user_id = new_user_id
+else:
+    user_id = st.query_params["user_id"]
+
+# Create a private workspace for this specific user in the global database
+if user_id not in global_db:
+    global_db[user_id] = {}
+
+chats_dictionary = global_db[user_id]
+
+# Standard chat session management
 if "current_chat_id" not in st.session_state:
     if chats_dictionary:
         st.session_state.current_chat_id = list(chats_dictionary.keys())[-1]
@@ -121,7 +138,6 @@ with chat_box:
                         for tool_name in msg["tools"]:
                             st.write(tool_name)
 
-                # 🚨 FIX: Force Markdown to respect newlines for user messages 🚨
                 if msg["role"] == "user":
                     st.markdown(msg["content"].replace("\n", "  \n"))
                 else:
@@ -180,7 +196,6 @@ if user_input:
                 st.caption(f"**Attached File:** {file_name}")
 
             if user_text:
-                # 🚨 FIX: Force Markdown to respect newlines immediately after sending 🚨
                 st.markdown(user_text.replace("\n", "  \n"))
 
     # ----------------------------------------
