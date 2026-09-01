@@ -132,7 +132,7 @@ with chat_box:
                     with st.expander("Tools used", expanded=False):
                         for tool_name in msg["tools"]: st.write(tool_name)
                 
-                # 🚨 Hide the secret suggestions tag from past chat history
+                # Hide the secret suggestions tag from past chat history
                 display_text = msg["content"].split("===SUGGESTIONS===")[0].strip()
                 
                 if msg["role"] == "user":
@@ -141,32 +141,29 @@ with chat_box:
                     st.markdown(display_text)
 
 # ==========================================
-# SUGGESTION BUTTONS UI
+# NATIVE PILLS UI (LIKE WHATSAPP/CHATGPT)
 # ==========================================
 suggestion_clicked = None
 
-# Only show suggestions for the very last message in the chat
 if active_history and active_history[-1]["role"] == "assistant":
     last_msg = active_history[-1]["content"]
     if "===SUGGESTIONS===" in last_msg:
         sug_text = last_msg.split("===SUGGESTIONS===")[1].strip()
-        # Clean up the AI's bullet points
         suggestions = [s.strip("- 1234567890.*") for s in sug_text.split("\n") if s.strip()]
         
         if suggestions:
+            # st.pills is Streamlit's native way to render selectable chips!
             st.markdown("<br>", unsafe_allow_html=True)
-            cols = st.columns(len(suggestions))
-            for i, sug in enumerate(suggestions):
-                if i < len(cols):
-                    if cols[i].button(sug, use_container_width=True):
-                        suggestion_clicked = sug
+            selection = st.pills("Quick Replies:", options=suggestions, label_visibility="collapsed", key=f"pills_{len(active_history)}")
+            
+            if selection:
+                suggestion_clicked = selection
 
 # ==========================================
 # USER INPUT & FILE HANDLING
 # ==========================================
 user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
 
-# Check if user typed something OR clicked a suggestion button
 if user_input or suggestion_clicked:
     user_text = ""
     uploaded_files = []
@@ -250,7 +247,7 @@ if user_input or suggestion_clicked:
                         text = item.get("content", "")
                         if text:
                             bot_answer += text
-                            # 🚨 Hide suggestions while the AI is live-typing
+                            # Hide suggestions while the AI is live-typing
                             display_answer = bot_answer.split("===SUGGESTIONS===")[0].strip()
                             answer_box.markdown(display_answer)
 
