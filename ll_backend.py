@@ -69,13 +69,14 @@ def get_weather(city):
 
 @tool
 def get_system_info():
-    """Get basic system information of the computer."""
+    """Get the backend Cloud Server system information (NOT the user's local PC)."""
 
-    memory=psutil.virtual_memory()
-    disk=psutil.disk_usage(os.path.abspath(os.sep))
-    cpu=psutil.cpu_percent(interval=1)
+    memory = psutil.virtual_memory()
+    disk = psutil.disk_usage(os.path.abspath(os.sep))
+    cpu = psutil.cpu_percent(interval=1)
 
     return f"""
+[Nova Cloud Server Diagnostics]
 Operating System: {platform.system()} {platform.release()}
 CPU Usage: {cpu}%
 CPU Cores: {psutil.cpu_count(logical=True)}
@@ -312,11 +313,14 @@ get_current_datetime tool.
 
 If the user asks about weather, use the get_weather tool.
 
-If the user asks about their computer's CPU, RAM,
-memory, disk, operating system, or basic system
-performance, use the get_system_info tool.
+If the user asks about their OWN personal computer's CPU, RAM,
+or specs, DO NOT use the get_system_info tool. Explain that as a 
+web-based bot, you cannot scan their local hardware due to browser 
+security. Instead, provide them with simple instructions to check it 
+themselves (e.g., "Press Ctrl+Shift+Esc to open Task Manager" on Windows).
 
-Do not guess system information.
+ONLY use the get_system_info tool if the user explicitly asks to 
+diagnose the "backend", "cloud server", or "Nova's system".
 
 IT_ISSUE:
 Help with basic IT problems.
