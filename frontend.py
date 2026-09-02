@@ -106,7 +106,7 @@ with st.sidebar:
                 st.rerun()
 
 # ==========================================
-# INPUT & SUGGESTION HANDLING
+# INPUT & CHAT INITIALIZATION
 # ==========================================
 active_id = st.session_state.current_chat_id
 if active_id == "PENDING":
@@ -116,13 +116,27 @@ else:
         chats_dictionary[active_id] = []
     active_history = chats_dictionary[active_id]
 
-# Capture user input BEFORE rendering the UI
+# The chat input automatically pins itself to the absolute bottom of the screen
 user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
 
+# ==========================================
+# RENDER UI CONTAINERS (IN CORRECT ORDER)
+# ==========================================
+# 1. Welcome Screen Container (Top)
+welcome_placeholder = st.empty()
+
+# 2. Main Chat Box Container (Middle)
+chat_box = st.container()
+
+# 3. Pills Suggestion Container (Bottom - Right above the text box)
 pills_placeholder = st.empty()
+
+# ==========================================
+# POPULATE UI CONTAINERS
+# ==========================================
 suggestion_clicked = None
 
-# Render suggestions only if the user hasn't typed anything new
+# Draw suggestions inside the bottom container
 if not user_input and active_history and active_history[-1]["role"] == "assistant":
     last_msg = active_history[-1]["content"]
     if "===SUGGESTIONS===" in last_msg:
@@ -138,12 +152,7 @@ if not user_input and active_history and active_history[-1]["role"] == "assistan
 
 is_new_message = bool(user_input or suggestion_clicked)
 
-# ==========================================
-# RENDER UI CONTAINERS
-# ==========================================
-# 1. Destructible Welcome Screen Container
-welcome_placeholder = st.empty()
-
+# Draw welcome screen if empty
 if len(active_history) == 0 and not is_new_message:
     with welcome_placeholder.container():
         st.markdown("<br><br><br><br>", unsafe_allow_html=True)
@@ -151,9 +160,7 @@ if len(active_history) == 0 and not is_new_message:
         st.markdown("<p style='text-align: center; font-size: 18px;'><b>Ask me about IT issues, upload a screenshot, or manage tickets.</b></p>", unsafe_allow_html=True)
         st.markdown("<br><br><br>", unsafe_allow_html=True)
 
-# 2. Main Chat Box Container
-chat_box = st.container()
-
+# Draw chat history inside the middle container
 with chat_box:
     for msg in active_history:
         with st.chat_message(msg["role"]):
@@ -178,7 +185,7 @@ with chat_box:
 # PROCESS NEW MESSAGE
 # ==========================================
 if is_new_message:
-    # 🚨 Forcefully destroy the welcome screen and old pills instantly
+    # Forcefully destroy the welcome screen and old pills instantly
     welcome_placeholder.empty()
     pills_placeholder.empty()
 
