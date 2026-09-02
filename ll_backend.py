@@ -5,7 +5,6 @@ import platform
 import psutil
 import requests
 import streamlit as st
-import re
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
@@ -107,50 +106,46 @@ def search_tickets(search_text):
         return result
     return "Unable to search tickets."
 
-# 🚨 THE FIX: Bulletproof Regex-based Pagination parsing
+# 🚨 THE FIX: Explicit integer typing with LangChain safety casts and error reporting
 @tool
-def list_all_tickets(query: str = ""):
-    """Fetch a list of available tickets in the Jira system.
-    If the user asks for a specific number (e.g., '10 tickets') or a range ('5 to 10'), pass that phrase here.
-    If they just say 'all', pass an empty string.
+def list_all_tickets(fetch_count: int = 15, start_index: int = 0):
+    """Fetch a list of recent tickets in the Jira system.
+    Args:
+        fetch_count: How many tickets to retrieve (default is 15, maximum allowed is 20).
+        start_index: Where to start in the list for pagination (default is 0).
     """
-    count = 15
-    start_index = 0
-    
-    # Let Python safely extract the numbers from whatever the AI passes in
+    # Double-check safety cast in case the AI passes bad data
     try:
-        numbers = [int(n) for n in re.findall(r'\d+', str(query))]
-        if len(numbers) >= 2:
-            start_index = numbers[0]
-            count = numbers[1] - numbers[0]
-        elif len(numbers) == 1:
-            count = numbers[0]
+        fetch_count = int(fetch_count)
+        start_index = int(start_index)
     except Exception:
-        pass
+        fetch_count = 15
+        start_index = 0
 
-    # SAFETY CAP: Force the absolute maximum to 20 to prevent server crashes
-    if count <= 0: count = 15
-    count = min(count, 20)
-
+    # Hard limits to prevent server crashes
+    fetch_count = max(1, min(fetch_count, 20))
+    start_index = max(0, start_index)
+    
     data={
         "jql":f'project = "{JIRA_PROJECT_KEY}" ORDER BY created DESC', 
-        "maxResults": count, 
+        "maxResults": fetch_count, 
         "startAt": start_index, 
         "fields":["summary","status","priority"]
     }
     
-    response=jira_request("POST", "/rest/api/3/search/jql", data)
+    response = jira_request("POST", "/rest/api/3/search/jql", data)
     
-    if response and response.status_code==200:
+    if response and response.status_code == 200:
         issues = response.json().get("issues",[])
         if not issues: return "There are currently no tickets in the requested range."
         
-        result=f"Here are the requested tickets:\n"
+        result = "Here are the requested tickets:\n"
         for issue in issues: 
-            result+=f'\n- **{issue["key"]}**: {issue["fields"].get("summary","")} (Status: {issue["fields"].get("status",{}).get("name","")})'
+            result += f'\n- **{issue["key"]}**: {issue["fields"].get("summary","")} (Status: {issue["fields"].get("status",{}).get("name","")})'
         return result
         
-    return "Unable to fetch the list of tickets."
+    # 🚨 DEBUG REPORTER: If Jira rejects the request, print the exact HTTP Status Code
+    return f"Unable to fetch tickets. Jira API Error Code: {response.status_code if response else 'No Response'}"
 
 @tool
 def update_ticket(ticket_id,summary="",priority="",description=""):
