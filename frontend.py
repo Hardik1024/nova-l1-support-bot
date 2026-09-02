@@ -81,12 +81,14 @@ with st.sidebar:
     st.write("Previous Chats:")
 
     for chat_id, history in list(chats_dictionary.items()):
-        if len(history) == 0: continue
+        if len(history) == 0:
+            continue
         chat_name = "New Chat"
         for message in history:
             if message["role"] == "user":
                 chat_name = message["content"][:15]
-                if len(message["content"]) > 15: chat_name += "..."
+                if len(message["content"]) > 15:
+                    chat_name += "..."
                 break
 
         col1, col2 = st.columns([8, 2])
@@ -110,7 +112,8 @@ active_id = st.session_state.current_chat_id
 if active_id == "PENDING":
     active_history = []
 else:
-    if active_id not in chats_dictionary: chats_dictionary[active_id] = []
+    if active_id not in chats_dictionary:
+        chats_dictionary[active_id] = []
     active_history = chats_dictionary[active_id]
 
 chat_box = st.container()
@@ -130,41 +133,52 @@ with chat_box:
                     st.image(base64.b64decode(msg["image_base64"]), width=300)
                 if msg["role"] == "assistant" and msg.get("tools"):
                     with st.expander("Tools used", expanded=False):
-                        for tool_name in msg["tools"]: st.write(tool_name)
-                
-                # Hide the secret suggestions tag from past chat history
+                        for tool_name in msg["tools"]:
+                            st.write(tool_name)
+
+                # Never display the suggestions delimiter in message history
                 display_text = msg["content"].split("===SUGGESTIONS===")[0].strip()
-                
+
                 if msg["role"] == "user":
                     st.markdown(display_text.replace("\n", "  \n"))
                 else:
                     st.markdown(display_text)
 
 # ==========================================
-# NATIVE PILLS UI (LIKE WHATSAPP/CHATGPT)
+# INPUT & SUGGESTION HANDLING
 # ==========================================
+# 1. Capture user input first so we know if a new message was submitted
+user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
+
+pills_placeholder = st.empty()
 suggestion_clicked = None
 
-if active_history and active_history[-1]["role"] == "assistant":
+# 2. Only render pills if the user HAS NOT submitted a new text message
+if not user_input and active_history and active_history[-1]["role"] == "assistant":
     last_msg = active_history[-1]["content"]
     if "===SUGGESTIONS===" in last_msg:
         sug_text = last_msg.split("===SUGGESTIONS===")[1].strip()
         suggestions = [s.strip("- 1234567890.*") for s in sug_text.split("\n") if s.strip()]
-        
+
         if suggestions:
-            # st.pills is Streamlit's native way to render selectable chips!
-            st.markdown("<br>", unsafe_allow_html=True)
-            selection = st.pills("Quick Replies:", options=suggestions, label_visibility="collapsed", key=f"pills_{len(active_history)}")
-            
-            if selection:
-                suggestion_clicked = selection
+            with pills_placeholder.container():
+                st.markdown("<br>", unsafe_allow_html=True)
+                selection = st.pills(
+                    "Quick Replies:",
+                    options=suggestions,
+                    label_visibility="collapsed",
+                    key=f"pills_{len(active_history)}"
+                )
+                if selection:
+                    suggestion_clicked = selection
+                    # Clear pills immediately upon click before the spinner starts
+                    pills_placeholder.empty()
 
-# ==========================================
-# USER INPUT & FILE HANDLING
-# ==========================================
-user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
-
+# 3. Process the response when either chat_input or a suggestion pill triggers
 if user_input or suggestion_clicked:
+    # Ensure any visible pills are wiped out during generation
+    pills_placeholder.empty()
+
     user_text = ""
     uploaded_files = []
 
@@ -197,29 +211,35 @@ if user_input or suggestion_clicked:
             pdf_reader = PdfReader(uploaded_file)
             for page in pdf_reader.pages:
                 page_text = page.extract_text()
-                if page_text: extracted_text += page_text + "\n"
+                if page_text:
+                    extracted_text += page_text + "\n"
         elif ext in ["png", "jpg", "jpeg", "webp"]:
             image_bytes = uploaded_file.read()
             image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
     with chat_box:
         with st.chat_message("user"):
-            if file_name and not image_base64: st.caption(f"**Attached File:** {file_name}")
-            if image_base64: st.image(base64.b64decode(image_base64), width=300)
-            if user_text: st.markdown(user_text.replace("\n", "  \n"))
+            if file_name and not image_base64:
+                st.caption(f"**Attached File:** {file_name}")
+            if image_base64:
+                st.image(base64.b64decode(image_base64), width=300)
+            if user_text:
+                st.markdown(user_text.replace("\n", "  \n"))
 
     if file_name and not user_text:
         user_text = "Please analyze this attached file/image."
 
     user_message_data = {"role": "user", "content": user_text}
-    if file_name: user_message_data["file_name"] = file_name
-    if image_base64: user_message_data["image_base64"] = image_base64
+    if file_name:
+        user_message_data["file_name"] = file_name
+    if image_base64:
+        user_message_data["image_base64"] = image_base64
 
     active_history.append(user_message_data)
     save_chat(active_id, user_id, active_history)
 
     # ----------------------------------------
-    # USER PROMPT + TOOL STREAMING
+    # STREAMING LLM RESPONSE
     # ----------------------------------------
     with chat_box:
         with st.chat_message("assistant"):
@@ -247,19 +267,21 @@ if user_input or suggestion_clicked:
                         text = item.get("content", "")
                         if text:
                             bot_answer += text
-                            # Hide suggestions while the AI is live-typing
+                            # Hide the suggestion block during live token streaming
                             display_answer = bot_answer.split("===SUGGESTIONS===")[0].strip()
                             answer_box.markdown(display_answer)
 
             if tools_used:
                 tool_box.empty()
                 with st.expander("Tools used", expanded=False):
-                    for tool_name in tools_used: st.write(tool_name)
+                    for tool_name in tools_used:
+                        st.write(tool_name)
 
     assistant_message = {"role": "assistant", "content": bot_answer}
-    if tools_used: assistant_message["tools"] = tools_used
+    if tools_used:
+        assistant_message["tools"] = tools_used
 
     active_history.append(assistant_message)
     save_chat(active_id, user_id, active_history)
-    
+
     st.rerun()
