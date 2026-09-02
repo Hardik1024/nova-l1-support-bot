@@ -106,7 +106,7 @@ with st.sidebar:
                 st.rerun()
 
 # ==========================================
-# MAIN CHAT WINDOW PREPARATION
+# INPUT & SUGGESTION HANDLING
 # ==========================================
 active_id = st.session_state.current_chat_id
 if active_id == "PENDING":
@@ -116,13 +116,13 @@ else:
         chats_dictionary[active_id] = []
     active_history = chats_dictionary[active_id]
 
-# 🚨 CHANGE 1: Capture user input BEFORE rendering the chat box UI
+# Capture user input BEFORE rendering the UI
 user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
 
 pills_placeholder = st.empty()
 suggestion_clicked = None
 
-# 🚨 CHANGE 2: Only show pills if the user hasn't typed anything new yet
+# Render suggestions only if the user hasn't typed anything new
 if not user_input and active_history and active_history[-1]["role"] == "assistant":
     last_msg = active_history[-1]["content"]
     if "===SUGGESTIONS===" in last_msg:
@@ -132,55 +132,54 @@ if not user_input and active_history and active_history[-1]["role"] == "assistan
         if suggestions:
             with pills_placeholder.container():
                 st.markdown("<br>", unsafe_allow_html=True)
-                selection = st.pills(
-                    "Quick Replies:",
-                    options=suggestions,
-                    label_visibility="collapsed",
-                    key=f"pills_{len(active_history)}"
-                )
+                selection = st.pills("Quick Replies:", options=suggestions, label_visibility="collapsed", key=f"pills_{len(active_history)}")
                 if selection:
                     suggestion_clicked = selection
 
-# Detect if the user triggered a new message
-is_new_message = user_input or suggestion_clicked
+is_new_message = bool(user_input or suggestion_clicked)
 
 # ==========================================
-# RENDER CHAT HISTORY OR WELCOME SCREEN
+# RENDER UI CONTAINERS
 # ==========================================
-chat_box = st.container()
+# 🚨 1. Destructible Welcome Screen Container
+welcome_placeholder = st.empty()
 
-with chat_box:
-    # 🚨 CHANGE 3: Hide welcome screen INSTANTLY if a new message was sent
-    if len(active_history) == 0 and not is_new_message:
+if len(active_history) == 0 and not is_new_message:
+    with welcome_placeholder.container():
         st.markdown("<br><br><br><br>", unsafe_allow_html=True)
         st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>How can I help you?</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; font-size: 18px;'><b>Ask me about IT issues, upload a screenshot, or manage tickets.</b></p>", unsafe_allow_html=True)
         st.markdown("<br><br><br>", unsafe_allow_html=True)
-    else:
-        for msg in active_history:
-            with st.chat_message(msg["role"]):
-                if "file_name" in msg:
-                    st.caption(f"**Attached File:** {msg['file_name']}")
-                if "image_base64" in msg:
-                    st.image(base64.b64decode(msg["image_base64"]), width=300)
-                if msg["role"] == "assistant" and msg.get("tools"):
-                    with st.expander("Tools used", expanded=False):
-                        for tool_name in msg["tools"]:
-                            st.write(tool_name)
 
-                # Never display the suggestions delimiter in message history
-                display_text = msg["content"].split("===SUGGESTIONS===")[0].strip()
+# 2. Main Chat Box Container
+chat_box = st.container()
 
-                if msg["role"] == "user":
-                    st.markdown(display_text.replace("\n", "  \n"))
-                else:
-                    st.markdown(display_text)
+with chat_box:
+    for msg in active_history:
+        with st.chat_message(msg["role"]):
+            if "file_name" in msg:
+                st.caption(f"**Attached File:** {msg['file_name']}")
+            if "image_base64" in msg:
+                st.image(base64.b64decode(msg["image_base64"]), width=300)
+            if msg["role"] == "assistant" and msg.get("tools"):
+                with st.expander("Tools used", expanded=False):
+                    for tool_name in msg["tools"]:
+                        st.write(tool_name)
+
+            # Never display the suggestions delimiter in message history
+            display_text = msg["content"].split("===SUGGESTIONS===")[0].strip()
+
+            if msg["role"] == "user":
+                st.markdown(display_text.replace("\n", "  \n"))
+            else:
+                st.markdown(display_text)
 
 # ==========================================
 # PROCESS NEW MESSAGE
 # ==========================================
 if is_new_message:
-    # Immediately destroy the pills UI so it vanishes while loading
+    # 🚨 Forcefully destroy the welcome screen and old pills instantly
+    welcome_placeholder.empty()
     pills_placeholder.empty()
 
     user_text = ""
@@ -221,7 +220,6 @@ if is_new_message:
             image_bytes = uploaded_file.read()
             image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    # Render the user's message dynamically at the TOP of the empty screen
     with chat_box:
         with st.chat_message("user"):
             if file_name and not image_base64:
