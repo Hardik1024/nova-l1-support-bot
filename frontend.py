@@ -9,21 +9,16 @@ import random
 from pypdf import PdfReader
 
 # ==========================================
-# PAGE SETUP & SOBER AESTHETICS (CSS)
+# PAGE SETUP & DYNAMIC AESTHETICS (CSS)
 # ==========================================
 st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
 
-# This tiny CSS block adds the sober gradient and cleans up Streamlit's default padding
+# Theme-aware CSS that automatically adapts to Light or Dark mode
 st.markdown("""
 <style>
-    /* Elegant, subtle background gradient (Soft slate-blue fading to white) */
+    /* Dynamic background gradient */
     .stApp {
-        background: linear-gradient(180deg, #F0F4F8 0%, #FFFFFF 60%);
-    }
-    /* Clean, contrasting sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #F8FAFC;
-        border-right: 1px solid #E2E8F0;
+        background: linear-gradient(180deg, var(--secondary-background-color) 0%, var(--background-color) 60%);
     }
     /* Reduce the massive empty gap at the top of the screen */
     .block-container {
@@ -174,17 +169,17 @@ pills_placeholder = st.empty()
 suggestion_clicked = None
 prompt_clicked = None
 
-# Draw the Clean Welcome Screen
+# Draw the Adaptive Welcome Screen
 if len(active_history) == 0:
     with welcome_placeholder.container():
-        # 🚨 FIX: Widened the center column from [1, 2, 1] to [1, 3, 1] to prevent text wrapping
         _, center_col, _ = st.columns([1, 3, 1])
         
         with center_col:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
-            # 🚨 FIX: Added back the deep blue color (#1E3A8A)
-            st.markdown("<h2 style='text-align: center; font-size: 2.2rem; margin-bottom: 5px; color: #1E3A8A;'>How can I help you today?</h2>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; font-size: 1.05rem; color: #6B7280; margin-top: 0px;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
+            # Dropped hardcoded colors; relies on Streamlit's native theme-aware text colors
+            st.markdown("<h2 style='text-align: center; font-size: 2.2rem; margin-bottom: 5px;'>How can I help you today?</h2>", unsafe_allow_html=True)
+            # Opacity creates a subtle, sober gray look that works on both dark and light backgrounds
+            st.markdown("<p style='text-align: center; font-size: 1.05rem; margin-top: 0px; opacity: 0.7;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             
             if st.session_state.is_first_launch:
