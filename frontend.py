@@ -9,9 +9,28 @@ import random
 from pypdf import PdfReader
 
 # ==========================================
-# PAGE SETUP
+# PAGE SETUP & SOBER AESTHETICS (CSS)
 # ==========================================
 st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
+
+# This tiny CSS block adds the sober gradient and cleans up Streamlit's default padding
+st.markdown("""
+<style>
+    /* Elegant, subtle background gradient (Soft slate-blue fading to white) */
+    .stApp {
+        background: linear-gradient(180deg, #F0F4F8 0%, #FFFFFF 60%);
+    }
+    /* Clean, contrasting sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #F8FAFC;
+        border-right: 1px solid #E2E8F0;
+    }
+    /* Reduce the massive empty gap at the top of the screen */
+    .block-container {
+        padding-top: 3rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ==========================================
 # PREDEFINED PROMPT POOL
@@ -158,16 +177,16 @@ prompt_clicked = None
 # Draw the Clean Welcome Screen
 if len(active_history) == 0:
     with welcome_placeholder.container():
-        # A 3-column layout keeps the text and buttons perfectly centered without stretching
-        _, center_col, _ = st.columns([1, 2, 1])
+        # 🚨 FIX: Widened the center column from [1, 2, 1] to [1, 3, 1] to prevent text wrapping
+        _, center_col, _ = st.columns([1, 3, 1])
         
         with center_col:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
-            st.markdown("<h2 style='text-align: center; font-size: 2.2rem; margin-bottom: 5px;'>How can I help you today?</h2>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; font-size: 1rem; color: #6B7280; margin-top: 0px;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
+            # 🚨 FIX: Added back the deep blue color (#1E3A8A)
+            st.markdown("<h2 style='text-align: center; font-size: 2.2rem; margin-bottom: 5px; color: #1E3A8A;'>How can I help you today?</h2>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; font-size: 1.05rem; color: #6B7280; margin-top: 0px;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # The 2x2 Grid creates balanced, chunky buttons that look great on desktop and mobile
             if st.session_state.is_first_launch:
                 prompts = st.session_state.welcome_prompts
                 c1, c2 = st.columns(2)
