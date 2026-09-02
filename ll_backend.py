@@ -5,6 +5,7 @@ import platform
 import psutil
 import requests
 import streamlit as st
+import re
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
@@ -106,21 +107,29 @@ def search_tickets(search_text):
         return result
     return "Unable to search tickets."
 
-# 🚨 THE FIX: Added Pagination and a Hard Limit of 20
+# 🚨 THE FIX: Bulletproof Regex-based Pagination parsing
 @tool
-def list_all_tickets(count: int = 15, start_index: int = 0):
+def list_all_tickets(query: str = ""):
     """Fetch a list of available tickets in the Jira system.
-    - count: How many tickets to fetch.
-    - start_index: Where to start fetching from (e.g., to get tickets 5 to 10, start_index=4, count=6).
+    If the user asks for a specific number (e.g., '10 tickets') or a range ('5 to 10'), pass that phrase here.
+    If they just say 'all', pass an empty string.
     """
+    count = 15
+    start_index = 0
+    
+    # Let Python safely extract the numbers from whatever the AI passes in
     try:
-        count = int(count)
-        start_index = int(start_index)
-    except:
-        count = 15
-        start_index = 0
+        numbers = [int(n) for n in re.findall(r'\d+', str(query))]
+        if len(numbers) >= 2:
+            start_index = numbers[0]
+            count = numbers[1] - numbers[0]
+        elif len(numbers) == 1:
+            count = numbers[0]
+    except Exception:
+        pass
 
     # SAFETY CAP: Force the absolute maximum to 20 to prevent server crashes
+    if count <= 0: count = 15
     count = min(count, 20)
 
     data={
