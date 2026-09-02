@@ -5,12 +5,35 @@ import docx
 import base64
 import sqlite3
 import json
+import random
 from pypdf import PdfReader
 
 # ==========================================
 # PAGE SETUP
 # ==========================================
 st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
+
+# ==========================================
+# PREDEFINED PROMPT POOL
+# ==========================================
+PROMPT_POOL = [
+    "⛅ Check the current weather",
+    "📅 What is the date and time?",
+    "🎫 Create a support ticket",
+    "💻 Check backend system info",
+    "📋 List my Jira tickets",
+    "🛜 I'm having Wi-Fi issues",
+    "🔑 I need a password reset",
+    "📱 Mobile device won't connect",
+    "🖨️ Printer is offline",
+    "🐌 My computer is running slow"
+]
+
+if "is_first_launch" not in st.session_state:
+    st.session_state.is_first_launch = True
+
+if "welcome_prompts" not in st.session_state:
+    st.session_state.welcome_prompts = random.sample(PROMPT_POOL, 4)
 
 # ==========================================
 # SQLITE DATABASE SETUP
@@ -75,6 +98,8 @@ with st.sidebar:
 
     if st.button("+ New Chat", use_container_width=True):
         st.session_state.current_chat_id = "PENDING"
+        # Hide the 2x2 grid for all subsequent new chats
+        st.session_state.is_first_launch = False 
         st.rerun()
 
     st.divider()
@@ -116,27 +141,45 @@ else:
         chats_dictionary[active_id] = []
     active_history = chats_dictionary[active_id]
 
-# The chat input automatically pins itself to the absolute bottom of the screen
 user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
 
 # ==========================================
-# RENDER UI CONTAINERS (IN CORRECT ORDER)
+# RENDER UI CONTAINERS 
 # ==========================================
-# 1. Welcome Screen Container (Top)
 welcome_placeholder = st.empty()
-
-# 2. Main Chat Box Container (Middle)
 chat_box = st.container()
-
-# 3. Pills Suggestion Container (Bottom - Right above the text box)
 pills_placeholder = st.empty()
 
 # ==========================================
 # POPULATE UI CONTAINERS
 # ==========================================
 suggestion_clicked = None
+prompt_clicked = None
 
-# Draw suggestions inside the bottom container
+# Draw the new Welcome Screen & 2x2 Grid (Only if empty)
+if len(active_history) == 0:
+    with welcome_placeholder.container():
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #1E3A8A; margin-bottom: 0px;'>💠 Nova</h1>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; color: #4B5563; margin-top: 0px;'>L1 Support Chatbot</h3>", unsafe_allow_html=True)
+        st.divider()
+        st.markdown("<h2 style='text-align: center;'>How can I help you today?</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; font-size: 16px; color: gray;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Only show the 2x2 prompt grid on the absolute first launch
+        if st.session_state.is_first_launch:
+            col1, col2 = st.columns(2)
+            prompts = st.session_state.welcome_prompts
+            
+            with col1:
+                if st.button(prompts[0], key="prompt_0", use_container_width=True): prompt_clicked = prompts[0]
+                if st.button(prompts[2], key="prompt_2", use_container_width=True): prompt_clicked = prompts[2]
+            with col2:
+                if st.button(prompts[1], key="prompt_1", use_container_width=True): prompt_clicked = prompts[1]
+                if st.button(prompts[3], key="prompt_3", use_container_width=True): prompt_clicked = prompts[3]
+
+# Draw AI Suggestions (Pills)
 if not user_input and active_history and active_history[-1]["role"] == "assistant":
     last_msg = active_history[-1]["content"]
     if "===SUGGESTIONS===" in last_msg:
@@ -150,15 +193,8 @@ if not user_input and active_history and active_history[-1]["role"] == "assistan
                 if selection:
                     suggestion_clicked = selection
 
-is_new_message = bool(user_input or suggestion_clicked)
-
-# Draw welcome screen if empty
-if len(active_history) == 0 and not is_new_message:
-    with welcome_placeholder.container():
-        st.markdown("<br><br><br><br>", unsafe_allow_html=True)
-        st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>How can I help you?</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; font-size: 18px;'><b>Ask me about IT issues, upload a screenshot, or manage tickets.</b></p>", unsafe_allow_html=True)
-        st.markdown("<br><br><br>", unsafe_allow_html=True)
+# Check if ANY input method was triggered
+is_new_message = bool(user_input or suggestion_clicked or prompt_clicked)
 
 # Draw chat history inside the middle container
 with chat_box:
@@ -173,7 +209,6 @@ with chat_box:
                     for tool_name in msg["tools"]:
                         st.write(tool_name)
 
-            # Never display the suggestions delimiter in message history
             display_text = msg["content"].split("===SUGGESTIONS===")[0].strip()
 
             if msg["role"] == "user":
@@ -185,9 +220,10 @@ with chat_box:
 # PROCESS NEW MESSAGE
 # ==========================================
 if is_new_message:
-    # Forcefully destroy the welcome screen and old pills instantly
+    # Instantly wipe welcome UI and set first launch to False
     welcome_placeholder.empty()
     pills_placeholder.empty()
+    st.session_state.is_first_launch = False 
 
     user_text = ""
     uploaded_files = []
@@ -197,6 +233,8 @@ if is_new_message:
         uploaded_files = user_input.files
     elif suggestion_clicked:
         user_text = suggestion_clicked
+    elif prompt_clicked:
+        user_text = prompt_clicked
 
     if st.session_state.current_chat_id == "PENDING":
         new_id = str(uuid.uuid4())[:6]
@@ -277,7 +315,6 @@ if is_new_message:
                         text = item.get("content", "")
                         if text:
                             bot_answer += text
-                            # Hide the suggestion block during live token streaming
                             display_answer = bot_answer.split("===SUGGESTIONS===")[0].strip()
                             answer_box.markdown(display_answer)
 
