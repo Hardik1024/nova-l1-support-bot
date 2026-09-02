@@ -14,19 +14,19 @@ from pypdf import PdfReader
 st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
 
 # ==========================================
-# PREDEFINED PROMPT POOL
+# PREDEFINED PROMPT POOL (Short & Punchy for 4-Col Grid)
 # ==========================================
 PROMPT_POOL = [
-    "⛅ Check the current weather",
-    "📅 What is the date and time?",
-    "🎫 Create a support ticket",
-    "💻 Check backend system info",
-    "📋 List my Jira tickets",
-    "🛜 I'm having Wi-Fi issues",
-    "🔑 I need a password reset",
-    "📱 Mobile device won't connect",
-    "🖨️ Printer is offline",
-    "🐌 My computer is running slow"
+    "⛅ Check Weather",
+    "📅 Date & Time",
+    "🎫 Create Ticket",
+    "💻 System Info",
+    "📋 My Tickets",
+    "🛜 Wi-Fi Issue",
+    "🔑 Reset Password",
+    "📱 Mobile Config",
+    "🖨️ Printer Issue",
+    "🐌 Slow PC"
 ]
 
 if "is_first_launch" not in st.session_state:
@@ -98,7 +98,6 @@ with st.sidebar:
 
     if st.button("+ New Chat", use_container_width=True):
         st.session_state.current_chat_id = "PENDING"
-        # Hide the 2x2 grid for all subsequent new chats
         st.session_state.is_first_launch = False 
         st.rerun()
 
@@ -156,28 +155,36 @@ pills_placeholder = st.empty()
 suggestion_clicked = None
 prompt_clicked = None
 
-# Draw the new Welcome Screen & 2x2 Grid (Only if empty)
+# Draw the Redesigned Welcome Screen (Only if empty)
 if len(active_history) == 0:
     with welcome_placeholder.container():
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("<h1 style='text-align: center; color: #1E3A8A; margin-bottom: 0px;'>💠 Nova</h1>", unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align: center; color: #4B5563; margin-top: 0px;'>L1 Support Chatbot</h3>", unsafe_allow_html=True)
-        st.divider()
-        st.markdown("<h2 style='text-align: center;'>How can I help you today?</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; font-size: 16px; color: gray;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
+        # Using columns to squeeze the UI into the center of the screen
+        _, center_col, _ = st.columns([1, 4, 1])
         
-        # Only show the 2x2 prompt grid on the absolute first launch
-        if st.session_state.is_first_launch:
-            col1, col2 = st.columns(2)
-            prompts = st.session_state.welcome_prompts
+        with center_col:
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            # Tightly grouped header
+            st.markdown("<h1 style='text-align: center; font-size: 3.5rem; color: #1E3A8A; margin-bottom: 0px; padding-bottom: 0px;'>💠 Nova</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; font-size: 1.2rem; color: #6B7280; font-weight: 600; margin-top: -10px;'>L1 Support Chatbot</p>", unsafe_allow_html=True)
             
-            with col1:
-                if st.button(prompts[0], key="prompt_0", use_container_width=True): prompt_clicked = prompts[0]
-                if st.button(prompts[2], key="prompt_2", use_container_width=True): prompt_clicked = prompts[2]
-            with col2:
-                if st.button(prompts[1], key="prompt_1", use_container_width=True): prompt_clicked = prompts[1]
-                if st.button(prompts[3], key="prompt_3", use_container_width=True): prompt_clicked = prompts[3]
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; font-size: 1.8rem; margin-bottom: 5px;'>How can I help you today?</h2>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; font-size: 1rem; color: #6B7280; margin-top: 0px;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # 4-Column Grid for Prompts (Mimicking the mockup layout)
+            if st.session_state.is_first_launch:
+                prompts = st.session_state.welcome_prompts
+                c1, c2, c3, c4 = st.columns(4)
+                
+                with c1:
+                    if st.button(prompts[0], use_container_width=True): prompt_clicked = prompts[0]
+                with c2:
+                    if st.button(prompts[1], use_container_width=True): prompt_clicked = prompts[1]
+                with c3:
+                    if st.button(prompts[2], use_container_width=True): prompt_clicked = prompts[2]
+                with c4:
+                    if st.button(prompts[3], use_container_width=True): prompt_clicked = prompts[3]
 
 # Draw AI Suggestions (Pills)
 if not user_input and active_history and active_history[-1]["role"] == "assistant":
@@ -220,7 +227,6 @@ with chat_box:
 # PROCESS NEW MESSAGE
 # ==========================================
 if is_new_message:
-    # Instantly wipe welcome UI and set first launch to False
     welcome_placeholder.empty()
     pills_placeholder.empty()
     st.session_state.is_first_launch = False 
