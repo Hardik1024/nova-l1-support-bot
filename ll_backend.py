@@ -106,17 +106,41 @@ def search_tickets(search_text):
         return result
     return "Unable to search tickets."
 
+# 🚨 THE FIX: Added Pagination and a Hard Limit of 20
 @tool
-def list_all_tickets():
-    """Fetch a broad list of all recent available tickets in the Jira system."""
-    data={"jql":f'project = "{JIRA_PROJECT_KEY}" ORDER BY created DESC', "maxResults": 15, "fields":["summary","status","priority"]}
+def list_all_tickets(count: int = 15, start_index: int = 0):
+    """Fetch a list of available tickets in the Jira system.
+    - count: How many tickets to fetch.
+    - start_index: Where to start fetching from (e.g., to get tickets 5 to 10, start_index=4, count=6).
+    """
+    try:
+        count = int(count)
+        start_index = int(start_index)
+    except:
+        count = 15
+        start_index = 0
+
+    # SAFETY CAP: Force the absolute maximum to 20 to prevent server crashes
+    count = min(count, 20)
+
+    data={
+        "jql":f'project = "{JIRA_PROJECT_KEY}" ORDER BY created DESC', 
+        "maxResults": count, 
+        "startAt": start_index, 
+        "fields":["summary","status","priority"]
+    }
+    
     response=jira_request("POST", "/rest/api/3/search/jql", data)
+    
     if response and response.status_code==200:
         issues = response.json().get("issues",[])
-        if not issues: return "There are currently no tickets in the system."
-        result="Here are the most recent tickets in the system:\n"
-        for issue in issues: result+=f'\n- **{issue["key"]}**: {issue["fields"].get("summary","")} (Status: {issue["fields"].get("status",{}).get("name","")})'
+        if not issues: return "There are currently no tickets in the requested range."
+        
+        result=f"Here are the requested tickets:\n"
+        for issue in issues: 
+            result+=f'\n- **{issue["key"]}**: {issue["fields"].get("summary","")} (Status: {issue["fields"].get("status",{}).get("name","")})'
         return result
+        
     return "Unable to fetch the list of tickets."
 
 @tool
@@ -141,7 +165,6 @@ def delete_ticket(ticket_id):
     return "Unable to delete ticket."
 
 
-# 🚨 GUARDRAILS: Added Strict Data Output Rule
 SYSTEM_INSTRUCTION="""
 You are Nova, an L1 Technical Support Agent for an IT helpdesk.
 Your ONLY job is to help with IT-related problems, ticketing, and basic diagnostics.
