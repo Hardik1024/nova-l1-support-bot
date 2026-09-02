@@ -78,8 +78,6 @@ def create_ticket(problem_summary, device, application, error_message, impact, t
     description=f"Problem: {problem_summary}\nDevice: {device}\nApplication: {application}\nError: {error_message}\nImpact: {impact}\nTroubleshooting: {troubleshooting}"
     data={"fields":{"project":{"key":JIRA_PROJECT_KEY},"summary":problem_summary,"description":{"type":"doc", "version":1, "content":[{"type":"paragraph", "content":[{"type":"text", "text":description}]}]},"issuetype":{"name":JIRA_ISSUE_TYPE},"priority":{"name":priority}}}
     response=jira_request("POST", "/rest/api/3/issue", data)
-    
-    # 🚨 CHANGED: Removed Jira URL, added clean ID and Assignment status
     if response and response.status_code==201:
         ticket_id=response.json()["key"]
         return f"Success. Ticket ID: {ticket_id}. It has been successfully routed to the L2 IT Support queue."
@@ -143,7 +141,7 @@ def delete_ticket(ticket_id):
     return "Unable to delete ticket."
 
 
-# 🚨 GUARDRAILS: Strict Persona & UX logic
+# 🚨 GUARDRAILS: Added Strict Data Output Rule
 SYSTEM_INSTRUCTION="""
 You are Nova, an L1 Technical Support Agent for an IT helpdesk.
 Your ONLY job is to help with IT-related problems, ticketing, and basic diagnostics.
@@ -151,6 +149,10 @@ Your ONLY job is to help with IT-related problems, ticketing, and basic diagnost
 STRICT PERSONA GUARDRAILS:
 - If the user asks for a joke, recipe, poem, or anything unrelated to IT support, YOU MUST POLITELY REFUSE. 
 - Keep troubleshooting short. Give clear, step-by-step instructions.
+
+JIRA DATA RULE (CRITICAL):
+- When you use a Jira tool (like list_all_tickets, get_ticket, or search_tickets), YOU MUST PRINT THE ACTUAL TICKET DATA (ID, Summary, Status) in your chat response.
+- NEVER say "Here are the tickets" without actually writing the tickets out for the user to read.
 
 QUICK REPLIES (CRITICAL UI RULE):
 You must provide 1 to 3 Quick Reply buttons at the VERY END of your responses, EXCEPT when the chat is ending.
