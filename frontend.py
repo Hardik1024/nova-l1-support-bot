@@ -14,7 +14,7 @@ from pypdf import PdfReader
 st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
 
 # ==========================================
-# PREDEFINED PROMPT POOL (Short & Punchy for 4-Col Grid)
+# PREDEFINED PROMPT POOL
 # ==========================================
 PROMPT_POOL = [
     "⛅ Check Weather",
@@ -155,35 +155,28 @@ pills_placeholder = st.empty()
 suggestion_clicked = None
 prompt_clicked = None
 
-# Draw the Redesigned Welcome Screen (Only if empty)
+# Draw the Clean Welcome Screen
 if len(active_history) == 0:
     with welcome_placeholder.container():
-        # Using columns to squeeze the UI into the center of the screen
-        _, center_col, _ = st.columns([1, 4, 1])
+        # A 3-column layout keeps the text and buttons perfectly centered without stretching
+        _, center_col, _ = st.columns([1, 2, 1])
         
         with center_col:
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            # Tightly grouped header
-            st.markdown("<h1 style='text-align: center; font-size: 3.5rem; color: #1E3A8A; margin-bottom: 0px; padding-bottom: 0px;'>💠 Nova</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; font-size: 1.2rem; color: #6B7280; font-weight: 600; margin-top: -10px;'>L1 Support Chatbot</p>", unsafe_allow_html=True)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("<h2 style='text-align: center; font-size: 1.8rem; margin-bottom: 5px;'>How can I help you today?</h2>", unsafe_allow_html=True)
+            st.markdown("<br><br><br>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; font-size: 2.2rem; margin-bottom: 5px;'>How can I help you today?</h2>", unsafe_allow_html=True)
             st.markdown("<p style='text-align: center; font-size: 1rem; color: #6B7280; margin-top: 0px;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # 4-Column Grid for Prompts (Mimicking the mockup layout)
+            # The 2x2 Grid creates balanced, chunky buttons that look great on desktop and mobile
             if st.session_state.is_first_launch:
                 prompts = st.session_state.welcome_prompts
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2 = st.columns(2)
                 
                 with c1:
                     if st.button(prompts[0], use_container_width=True): prompt_clicked = prompts[0]
+                    if st.button(prompts[2], use_container_width=True): prompt_clicked = prompts[2]
                 with c2:
                     if st.button(prompts[1], use_container_width=True): prompt_clicked = prompts[1]
-                with c3:
-                    if st.button(prompts[2], use_container_width=True): prompt_clicked = prompts[2]
-                with c4:
                     if st.button(prompts[3], use_container_width=True): prompt_clicked = prompts[3]
 
 # Draw AI Suggestions (Pills)
@@ -200,7 +193,6 @@ if not user_input and active_history and active_history[-1]["role"] == "assistan
                 if selection:
                     suggestion_clicked = selection
 
-# Check if ANY input method was triggered
 is_new_message = bool(user_input or suggestion_clicked or prompt_clicked)
 
 # Draw chat history inside the middle container
