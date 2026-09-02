@@ -106,46 +106,18 @@ def search_tickets(search_text):
         return result
     return "Unable to search tickets."
 
-# 🚨 THE FIX: Explicit integer typing with LangChain safety casts and error reporting
 @tool
-def list_all_tickets(fetch_count: int = 15, start_index: int = 0):
-    """Fetch a list of recent tickets in the Jira system.
-    Args:
-        fetch_count: How many tickets to retrieve (default is 15, maximum allowed is 20).
-        start_index: Where to start in the list for pagination (default is 0).
-    """
-    # Double-check safety cast in case the AI passes bad data
-    try:
-        fetch_count = int(fetch_count)
-        start_index = int(start_index)
-    except Exception:
-        fetch_count = 15
-        start_index = 0
-
-    # Hard limits to prevent server crashes
-    fetch_count = max(1, min(fetch_count, 20))
-    start_index = max(0, start_index)
-    
-    data={
-        "jql":f'project = "{JIRA_PROJECT_KEY}" ORDER BY created DESC', 
-        "maxResults": fetch_count, 
-        "startAt": start_index, 
-        "fields":["summary","status","priority"]
-    }
-    
-    response = jira_request("POST", "/rest/api/3/search/jql", data)
-    
-    if response and response.status_code == 200:
+def list_all_tickets():
+    """Fetch a broad list of all recent available tickets in the Jira system."""
+    data={"jql":f'project = "{JIRA_PROJECT_KEY}" ORDER BY created DESC', "maxResults": 15, "fields":["summary","status","priority"]}
+    response=jira_request("POST", "/rest/api/3/search/jql", data)
+    if response and response.status_code==200:
         issues = response.json().get("issues",[])
-        if not issues: return "There are currently no tickets in the requested range."
-        
-        result = "Here are the requested tickets:\n"
-        for issue in issues: 
-            result += f'\n- **{issue["key"]}**: {issue["fields"].get("summary","")} (Status: {issue["fields"].get("status",{}).get("name","")})'
+        if not issues: return "There are currently no tickets in the system."
+        result="Here are the most recent tickets in the system:\n"
+        for issue in issues: result+=f'\n- **{issue["key"]}**: {issue["fields"].get("summary","")} (Status: {issue["fields"].get("status",{}).get("name","")})'
         return result
-        
-    # 🚨 DEBUG REPORTER: If Jira rejects the request, print the exact HTTP Status Code
-    return f"Unable to fetch tickets. Jira API Error Code: {response.status_code if response else 'No Response'}"
+    return "Unable to fetch the list of tickets."
 
 @tool
 def update_ticket(ticket_id,summary="",priority="",description=""):
@@ -169,6 +141,7 @@ def delete_ticket(ticket_id):
     return "Unable to delete ticket."
 
 
+# 🚨 GUARDRAILS: Added Strict Data Output Rule
 SYSTEM_INSTRUCTION="""
 You are Nova, an L1 Technical Support Agent for an IT helpdesk.
 Your ONLY job is to help with IT-related problems, ticketing, and basic diagnostics.
