@@ -106,7 +106,7 @@ with st.sidebar:
                 st.rerun()
 
 # ==========================================
-# MAIN CHAT WINDOW
+# MAIN CHAT WINDOW PREPARATION
 # ==========================================
 active_id = st.session_state.current_chat_id
 if active_id == "PENDING":
@@ -116,10 +116,42 @@ else:
         chats_dictionary[active_id] = []
     active_history = chats_dictionary[active_id]
 
+# 🚨 CHANGE 1: Capture user input BEFORE rendering the chat box UI
+user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
+
+pills_placeholder = st.empty()
+suggestion_clicked = None
+
+# 🚨 CHANGE 2: Only show pills if the user hasn't typed anything new yet
+if not user_input and active_history and active_history[-1]["role"] == "assistant":
+    last_msg = active_history[-1]["content"]
+    if "===SUGGESTIONS===" in last_msg:
+        sug_text = last_msg.split("===SUGGESTIONS===")[1].strip()
+        suggestions = [s.strip("- 1234567890.*") for s in sug_text.split("\n") if s.strip()]
+
+        if suggestions:
+            with pills_placeholder.container():
+                st.markdown("<br>", unsafe_allow_html=True)
+                selection = st.pills(
+                    "Quick Replies:",
+                    options=suggestions,
+                    label_visibility="collapsed",
+                    key=f"pills_{len(active_history)}"
+                )
+                if selection:
+                    suggestion_clicked = selection
+
+# Detect if the user triggered a new message
+is_new_message = user_input or suggestion_clicked
+
+# ==========================================
+# RENDER CHAT HISTORY OR WELCOME SCREEN
+# ==========================================
 chat_box = st.container()
 
 with chat_box:
-    if len(active_history) == 0:
+    # 🚨 CHANGE 3: Hide welcome screen INSTANTLY if a new message was sent
+    if len(active_history) == 0 and not is_new_message:
         st.markdown("<br><br><br><br>", unsafe_allow_html=True)
         st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>How can I help you?</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; font-size: 18px;'><b>Ask me about IT issues, upload a screenshot, or manage tickets.</b></p>", unsafe_allow_html=True)
@@ -145,38 +177,10 @@ with chat_box:
                     st.markdown(display_text)
 
 # ==========================================
-# INPUT & SUGGESTION HANDLING
+# PROCESS NEW MESSAGE
 # ==========================================
-# 1. Capture user input first so we know if a new message was submitted
-user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
-
-pills_placeholder = st.empty()
-suggestion_clicked = None
-
-# 2. Only render pills if the user HAS NOT submitted a new text message
-if not user_input and active_history and active_history[-1]["role"] == "assistant":
-    last_msg = active_history[-1]["content"]
-    if "===SUGGESTIONS===" in last_msg:
-        sug_text = last_msg.split("===SUGGESTIONS===")[1].strip()
-        suggestions = [s.strip("- 1234567890.*") for s in sug_text.split("\n") if s.strip()]
-
-        if suggestions:
-            with pills_placeholder.container():
-                st.markdown("<br>", unsafe_allow_html=True)
-                selection = st.pills(
-                    "Quick Replies:",
-                    options=suggestions,
-                    label_visibility="collapsed",
-                    key=f"pills_{len(active_history)}"
-                )
-                if selection:
-                    suggestion_clicked = selection
-                    # Clear pills immediately upon click before the spinner starts
-                    pills_placeholder.empty()
-
-# 3. Process the response when either chat_input or a suggestion pill triggers
-if user_input or suggestion_clicked:
-    # Ensure any visible pills are wiped out during generation
+if is_new_message:
+    # Immediately destroy the pills UI so it vanishes while loading
     pills_placeholder.empty()
 
     user_text = ""
@@ -217,6 +221,7 @@ if user_input or suggestion_clicked:
             image_bytes = uploaded_file.read()
             image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
+    # Render the user's message dynamically at the TOP of the empty screen
     with chat_box:
         with st.chat_message("user"):
             if file_name and not image_base64:
