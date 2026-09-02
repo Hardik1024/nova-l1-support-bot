@@ -78,9 +78,11 @@ def create_ticket(problem_summary, device, application, error_message, impact, t
     description=f"Problem: {problem_summary}\nDevice: {device}\nApplication: {application}\nError: {error_message}\nImpact: {impact}\nTroubleshooting: {troubleshooting}"
     data={"fields":{"project":{"key":JIRA_PROJECT_KEY},"summary":problem_summary,"description":{"type":"doc", "version":1, "content":[{"type":"paragraph", "content":[{"type":"text", "text":description}]}]},"issuetype":{"name":JIRA_ISSUE_TYPE},"priority":{"name":priority}}}
     response=jira_request("POST", "/rest/api/3/issue", data)
+    
+    # 🚨 CHANGED: Removed Jira URL, added clean ID and Assignment status
     if response and response.status_code==201:
         ticket_id=response.json()["key"]
-        return f"Success. Ticket ID: {ticket_id}\nJira URL: {JIRA_BASE_URL}/browse/{ticket_id}"
+        return f"Success. Ticket ID: {ticket_id}. It has been successfully routed to the L2 IT Support queue."
     return "Unable to connect to Jira."
 
 @tool
@@ -141,7 +143,7 @@ def delete_ticket(ticket_id):
     return "Unable to delete ticket."
 
 
-# 🚨 UPDATED GUARDRAILS: Added "End of Chat" Exception
+# 🚨 GUARDRAILS: Strict Persona & UX logic
 SYSTEM_INSTRUCTION="""
 You are Nova, an L1 Technical Support Agent for an IT helpdesk.
 Your ONLY job is to help with IT-related problems, ticketing, and basic diagnostics.
