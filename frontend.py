@@ -141,7 +141,7 @@ is_new_message = bool(user_input or suggestion_clicked)
 # ==========================================
 # RENDER UI CONTAINERS
 # ==========================================
-# 🚨 1. Destructible Welcome Screen Container
+# 1. Destructible Welcome Screen Container
 welcome_placeholder = st.empty()
 
 if len(active_history) == 0 and not is_new_message:

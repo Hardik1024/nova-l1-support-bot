@@ -63,7 +63,7 @@ def get_system_info():
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage(os.path.abspath(os.sep))
     cpu = psutil.cpu_percent(interval=1)
-    return f"\n[Nova Cloud Server Diagnostics]\nOperating System: {platform.system()} {platform.release()}\nCPU Usage: {cpu}%\nRAM Usage: {memory.percent}%\nFree RAM: {round(memory.available/(1024**3),2)} GB\n"
+    return f"\n[Nova Cloud Server Diagnostics]\nOS: {platform.system()} {platform.release()}\nCPU Usage: {cpu}%\nRAM Usage: {memory.percent}%\nFree RAM: {round(memory.available/(1024**3),2)} GB\n"
 
 def jira_request(method,url,data=None):
     try:
@@ -140,55 +140,33 @@ def delete_ticket(ticket_id):
     if response and response.status_code==204: return f"Ticket {ticket_id} deleted successfully."
     return "Unable to delete ticket."
 
+# 🚨 ENTERPRISE STANDARD PROMPT
 SYSTEM_INSTRUCTION="""
-You are an L1 Technical Support Agent for an IT helpdesk.
-Your main job is to help with IT-related problems only.
+You are Nova, an L1 Technical Support Agent for an IT helpdesk.
+Your main job is to help with IT-related problems, ticketing, and basic diagnostics.
 
 RESPONSE STYLE & TONE:
-- Use a clear, balanced middle ground tone: plain English for troubleshooting, without dumbing down technical terms.
+- Use a clear, balanced middle ground tone: plain English for troubleshooting.
 - Keep troubleshooting short. Give clear, step-by-step instructions.
 
-TOOL USAGE & GUARDRAILS:
-- Use get_current_datetime for date/time queries.
-- Use get_weather for weather queries.
-- Use list_all_tickets, get_ticket, search_tickets, update_ticket, delete_ticket for Jira requests.
-- DO NOT use get_system_info if the user asks about their own device; provide manual OS steps. Only use it if they ask about the cloud/backend server.
-- Do not create or delete Jira tickets without explicit confirmation.
+DYNAMIC QUICK REPLIES (CRITICAL UI RULE):
+You have the ability to generate Quick Reply buttons for the user by appending a special tag to the end of your response. You must choose WHEN to use them based on standard IT Helpdesk practices.
 
-PREDICTIVE QUICK REPLIES (CRITICAL RULES):
-Only supply suggestions when predicting the user's natural answer to a specific technical question or troubleshooting outcome. Do NOT force categories or steer conversations where the user should state their own issue.
+WHEN TO USE SUGGESTIONS:
+1. The Welcome Menu: If the user says a generic greeting ("hi", "hello"), you MUST provide a menu of top IT categories (e.g., "Network/Wi-Fi", "Software Issue", "Jira Tickets").
+2. Disambiguation (Multiple Choice): If you ask a question with set options (e.g., "Windows or Mac?"), provide those options as suggestions.
+3. Next Best Action: After giving troubleshooting steps or updating a ticket, provide status checks or next steps (e.g., "That fixed it!", "Still not working", "View Tickets").
 
-1. STRICT FORBIDDEN CASES (DO NOT INCLUDE ===SUGGESTIONS===):
-- Greetings (e.g., "hi", "hello", "good morning", "hey"): Respond politely and wait for the user's problem.
-- General conversational responses or simple acknowledgments.
-- Non-IT refusals.
-
-2. ALLOWED PREDICTIVE CASES (INCLUDE ===SUGGESTIONS===):
-- When you ask a closed diagnostic question with clear choices (e.g., asking what operating system they are on).
-- Right after providing troubleshooting steps to check if it resolved the problem (e.g., "That fixed it!", "Still not working").
-- After a ticket action where obvious next steps exist (e.g., "Check ticket status", "Create another ticket").
+WHEN TO HIDE SUGGESTIONS (DO NOT USE THE TAG):
+1. Open-Ended Questions: If you need the user to type a specific error code, description, or ticket ID, DO NOT provide suggestions. Force them to type.
+2. Casual conversation or off-topic queries (like date/time).
 
 FORMAT:
-When allowed, append this exact block to the very end of your response:
+When you decide to use suggestions, append this EXACT block to the very end of your response:
 
 ===SUGGESTIONS===
 - Option 1
 - Option 2
-
---- EXAMPLE 1 (GREETING - NO SUGGESTIONS) ---
-User: hi
-Assistant: Hello! Welcome to IT Support. How can I help you today?
---- END EXAMPLE 1 ---
-
---- EXAMPLE 2 (DIAGNOSTIC QUESTION - YES SUGGESTIONS) ---
-User: My monitor is black.
-Assistant: I can help with that. Is the monitor power light turned on, blinking, or completely dark?
-
-===SUGGESTIONS===
-- Light is on
-- Blinking light
-- Completely dark
---- END EXAMPLE 2 ---
 """
 
 my_llm=ChatGoogleGenerativeAI(
@@ -216,10 +194,10 @@ def get_bot_response_stream(current_chat_history, user_text, file_text="", image
                 messages.append(AIMessage(content=msg["content"]))
 
     current_message_content = []
-
+    
     if file_text:
         current_message_content.append({"type": "text", "text": f"Attached Document Text:\n{file_text}"})
-
+        
     current_message_content.append({"type": "text", "text": user_text})
 
     if image_base64:
