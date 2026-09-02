@@ -5,6 +5,7 @@ import platform
 import psutil
 import requests
 import streamlit as st
+import re
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
@@ -107,17 +108,37 @@ def search_tickets(search_text):
     return "Unable to search tickets."
 
 @tool
-def list_all_tickets():
-    """Fetch a broad list of all recent available tickets in the Jira system."""
-    data={"jql":f'project = "{JIRA_PROJECT_KEY}" ORDER BY created DESC', "maxResults": 15, "fields":["summary","status","priority"]}
-    response=jira_request("POST", "/rest/api/3/search/jql", data)
-    if response and response.status_code==200:
+def list_all_tickets(fetch_count: int = 15, start_index: int = 0):
+    """Fetch a list of recent tickets in the Jira system."""
+    try:
+        fetch_count = int(fetch_count)
+        start_index = int(start_index)
+    except Exception:
+        fetch_count = 15
+        start_index = 0
+
+    fetch_count = max(1, min(fetch_count, 20))
+    start_index = max(0, start_index)
+    
+    data={
+        "jql":f'project = "{JIRA_PROJECT_KEY}" ORDER BY created DESC', 
+        "maxResults": fetch_count, 
+        "startAt": start_index, 
+        "fields":["summary","status","priority"]
+    }
+    
+    response = jira_request("POST", "/rest/api/3/search/jql", data)
+    
+    if response and response.status_code == 200:
         issues = response.json().get("issues",[])
-        if not issues: return "There are currently no tickets in the system."
-        result="Here are the most recent tickets in the system:\n"
-        for issue in issues: result+=f'\n- **{issue["key"]}**: {issue["fields"].get("summary","")} (Status: {issue["fields"].get("status",{}).get("name","")})'
+        if not issues: return "There are currently no tickets in the requested range."
+        
+        result = "Here are the requested tickets:\n"
+        for issue in issues: 
+            result += f'\n- **{issue["key"]}**: {issue["fields"].get("summary","")} (Status: {issue["fields"].get("status",{}).get("name","")})'
         return result
-    return "Unable to fetch the list of tickets."
+        
+    return f"Unable to fetch tickets. Jira API Error Code: {response.status_code if response else 'No Response'}"
 
 @tool
 def update_ticket(ticket_id,summary="",priority="",description=""):
@@ -141,7 +162,7 @@ def delete_ticket(ticket_id):
     return "Unable to delete ticket."
 
 
-# 🚨 GUARDRAILS: Added Strict Data Output Rule
+# 🚨 FIX: Added TICKET CONFIRMATION RULE
 SYSTEM_INSTRUCTION="""
 You are Nova, an L1 Technical Support Agent for an IT helpdesk.
 Your ONLY job is to help with IT-related problems, ticketing, and basic diagnostics.
@@ -149,6 +170,11 @@ Your ONLY job is to help with IT-related problems, ticketing, and basic diagnost
 STRICT PERSONA GUARDRAILS:
 - If the user asks for a joke, recipe, poem, or anything unrelated to IT support, YOU MUST POLITELY REFUSE. 
 - Keep troubleshooting short. Give clear, step-by-step instructions.
+
+TICKET CONFIRMATION RULE (CRITICAL):
+- NEVER call the `create_ticket` or `delete_ticket` tools without explicit final confirmation from the user.
+- Once you gather all necessary ticket details (Problem, Device, App, Error, Impact), you MUST summarize the details and ask: "Should I go ahead and submit this ticket?"
+- Only execute the tool AFTER the user explicitly says yes.
 
 JIRA DATA RULE (CRITICAL):
 - When you use a Jira tool (like list_all_tickets, get_ticket, or search_tickets), YOU MUST PRINT THE ACTUAL TICKET DATA (ID, Summary, Status) in your chat response.
@@ -167,7 +193,7 @@ WHEN TO USE SUGGESTIONS (ALL OTHER TIMES):
 1. Greetings or Refusals: Offer fallback navigation. (e.g., "- Report IT Issue", "- Check Tickets")
 2. Multiple Choice Questions: If you ask "Windows or Mac?", provide those exact choices.
 3. Open-Ended Questions: If asking for an error code, provide fallbacks. (e.g., "- I don't know the code", "- Where do I find this?")
-4. Post-Troubleshooting: Check status. (e.g., "- That fixed it", "- Still not working")
+4. Pre-Ticket Submission: When asking for confirmation to create a ticket, provide choices. (e.g., "- Yes, create it", "- No, cancel")
 
 FORMAT FOR SUGGESTIONS:
 When generating them, use this exact format at the very end of your response:
