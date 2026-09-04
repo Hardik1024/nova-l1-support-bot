@@ -3,10 +3,14 @@ import ll_backend
 import uuid
 import docx
 import base64
-import sqlite3
-import json
 import random
+import os
 from pypdf import PdfReader
+from dotenv import load_dotenv
+from supabase import create_client, Client
+
+# Load environment variables from your .env file
+load_dotenv()
 
 # ==========================================
 # PAGE SETUP & DYNAMIC AESTHETICS (CSS)
@@ -44,41 +48,33 @@ if "welcome_prompts" not in st.session_state:
     st.session_state.welcome_prompts = random.sample(PROMPT_POOL, 4)
 
 # ==========================================
-# SQLITE DATABASE SETUP
+# SUPABASE DATABASE SETUP
 # ==========================================
-def init_db():
-    conn = sqlite3.connect("nova_chats.db", check_same_thread=False)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS chats (session_id TEXT PRIMARY KEY, user_id TEXT, history TEXT)''')
-    conn.commit()
-    conn.close()
+SUPABASE_URL = os.getenv("https://ddzqicgqoiupculnevxm.supabase.co/rest/v1/")
+SUPABASE_KEY = os.getenv("sb_publishable_iMFaggd8kVo_aAe9aM7FiQ_J3UB9nSp")
+
+# Initialize the Supabase client
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def get_user_chats(user_id):
-    conn = sqlite3.connect("nova_chats.db", check_same_thread=False)
-    c = conn.cursor()
-    c.execute("SELECT session_id, history FROM chats WHERE user_id=?", (user_id,))
-    rows = c.fetchall()
-    conn.close()
+    """Pulls all previous chats for this specific user from the cloud."""
+    response = supabase.table("chats").select("*").eq("user_id", user_id).execute()
     chats = {}
-    for row in rows:
-        chats[row[0]] = json.loads(row[1])
+    for row in response.data:
+        chats[row["session_id"]] = row["history"]
     return chats
 
 def save_chat(session_id, user_id, history):
-    conn = sqlite3.connect("nova_chats.db", check_same_thread=False)
-    c = conn.cursor()
-    c.execute("REPLACE INTO chats (session_id, user_id, history) VALUES (?, ?, ?)", (session_id, user_id, json.dumps(history)))
-    conn.commit()
-    conn.close()
+    """Pushes a new message to the cloud. Upsert automatically updates existing chats."""
+    supabase.table("chats").upsert({
+        "session_id": session_id,
+        "user_id": user_id,
+        "history": history
+    }).execute()
 
 def delete_chat(session_id):
-    conn = sqlite3.connect("nova_chats.db", check_same_thread=False)
-    c = conn.cursor()
-    c.execute("DELETE FROM chats WHERE session_id=?", (session_id,))
-    conn.commit()
-    conn.close()
-
-init_db()
+    """Deletes a specific chat history from the cloud database."""
+    supabase.table("chats").delete().eq("session_id", session_id).execute()
 
 # ==========================================
 # USER IDENTITY (PERSISTENT IN SESSION STATE ONLY)
