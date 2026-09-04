@@ -84,31 +84,35 @@ def delete_chat(session_id):
 init_db()
 
 # ==========================================
-# USER & SESSION IDENTIFICATION (LAZY LOADING)
+# USER IDENTITY (PERSISTENT IN SESSION STATE ONLY)
 # ==========================================
-if "user_id" not in st.query_params:
-    user_id = str(uuid.uuid4())[:8]
-    st.query_params["user_id"] = user_id
-else:
-    user_id = st.query_params["user_id"]
+# Keep user_id in session_state so it NEVER pollutes the browser address bar
+if "user_id" not in st.session_state:
+    st.session_state.user_id = st.query_params.get("user_id", str(uuid.uuid4())[:8])
 
+user_id = st.session_state.user_id
 chats_dictionary = get_user_chats(user_id)
 
-# Read chat_id directly from the URL if present
+# ==========================================
+# LAZY CHAT SESSION LOADING
+# ==========================================
 url_chat_id = st.query_params.get("chat_id")
 
 if "current_chat_id" not in st.session_state:
-    # If the URL contains a valid chat ID from the database, load it; otherwise start clean (None)
     if url_chat_id and url_chat_id in chats_dictionary:
         st.session_state.current_chat_id = url_chat_id
     else:
         st.session_state.current_chat_id = None
 
-# Sync URL parameter if state changes
+# Keep URL synchronized: show ?chat_id= only when inside an active conversation
 if st.session_state.current_chat_id:
     st.query_params["chat_id"] = st.session_state.current_chat_id
 elif "chat_id" in st.query_params:
     del st.query_params["chat_id"]
+
+# Clean any residual user_id out of the address bar
+if "user_id" in st.query_params:
+    del st.query_params["user_id"]
 
 # ==========================================
 # SIDEBAR
@@ -175,7 +179,7 @@ pills_placeholder = st.empty()
 suggestion_clicked = None
 prompt_clicked = None
 
-# Display welcome cards ONLY when there is no active chat history
+# Show welcome screen only when on a fresh/empty chat
 if not active_history:
     with welcome_placeholder.container():
         _, center_col, _ = st.columns([1, 3, 1])
@@ -194,7 +198,7 @@ if not active_history:
                 if st.button(prompts[1], use_container_width=True): prompt_clicked = prompts[1]
                 if st.button(prompts[3], use_container_width=True): prompt_clicked = prompts[3]
 
-# AI Quick Replies
+# AI Suggestions
 if not user_input and active_history and active_history[-1]["role"] == "assistant":
     last_msg = active_history[-1]["content"]
     if "===SUGGESTIONS===" in last_msg:
@@ -246,7 +250,7 @@ if is_new_message:
     elif prompt_clicked:
         user_text = prompt_clicked
 
-    # LAZY ID CREATION: Generate session ID only upon first message submission
+    # LAZY CREATION: Generate chat_id only on first message submission
     if not st.session_state.current_chat_id:
         new_id = str(uuid.uuid4())[:8]
         st.session_state.current_chat_id = new_id
@@ -254,6 +258,8 @@ if is_new_message:
         active_id = new_id
         chats_dictionary[active_id] = []
         active_history = chats_dictionary[active_id]
+    else:
+        active_id = st.session_state.current_chat_id
 
     file_name = None
     extracted_text = ""
