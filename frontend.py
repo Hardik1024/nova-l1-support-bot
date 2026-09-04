@@ -13,14 +13,11 @@ from pypdf import PdfReader
 # ==========================================
 st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
 
-# Theme-aware CSS that automatically adapts to Light or Dark mode
 st.markdown("""
 <style>
-    /* Dynamic background gradient */
     .stApp {
         background: linear-gradient(180deg, var(--secondary-background-color) 0%, var(--background-color) 60%);
     }
-    /* Reduce the massive empty gap at the top of the screen */
     .block-container {
         padding-top: 3rem;
     }
@@ -87,22 +84,31 @@ def delete_chat(session_id):
 init_db()
 
 # ==========================================
-# USER IDENTIFICATION
+# USER & SESSION IDENTIFICATION (LAZY LOADING)
 # ==========================================
 if "user_id" not in st.query_params:
-    new_user_id = str(uuid.uuid4())
-    st.query_params["user_id"] = new_user_id
-    user_id = new_user_id
+    user_id = str(uuid.uuid4())[:8]
+    st.query_params["user_id"] = user_id
 else:
     user_id = st.query_params["user_id"]
 
 chats_dictionary = get_user_chats(user_id)
 
+# Read chat_id directly from the URL if present
+url_chat_id = st.query_params.get("chat_id")
+
 if "current_chat_id" not in st.session_state:
-    if chats_dictionary:
-        st.session_state.current_chat_id = list(chats_dictionary.keys())[-1]
+    # If the URL contains a valid chat ID from the database, load it; otherwise start clean (None)
+    if url_chat_id and url_chat_id in chats_dictionary:
+        st.session_state.current_chat_id = url_chat_id
     else:
-        st.session_state.current_chat_id = "PENDING"
+        st.session_state.current_chat_id = None
+
+# Sync URL parameter if state changes
+if st.session_state.current_chat_id:
+    st.query_params["chat_id"] = st.session_state.current_chat_id
+elif "chat_id" in st.query_params:
+    del st.query_params["chat_id"]
 
 # ==========================================
 # SIDEBAR
@@ -111,21 +117,24 @@ with st.sidebar:
     st.title("💠 Nova")
 
     if st.button("+ New Chat", use_container_width=True):
-        st.session_state.current_chat_id = "PENDING"
-        st.session_state.is_first_launch = False 
+        st.session_state.current_chat_id = None
+        if "chat_id" in st.query_params:
+            del st.query_params["chat_id"]
+        st.session_state.is_first_launch = True
+        st.session_state.welcome_prompts = random.sample(PROMPT_POOL, 4)
         st.rerun()
 
     st.divider()
     st.write("Previous Chats:")
 
     for chat_id, history in list(chats_dictionary.items()):
-        if len(history) == 0:
+        if not history:
             continue
         chat_name = "New Chat"
         for message in history:
             if message["role"] == "user":
-                chat_name = message["content"][:15]
-                if len(message["content"]) > 15:
+                chat_name = message["content"][:18]
+                if len(message["content"]) > 18:
                     chat_name += "..."
                 break
 
@@ -133,73 +142,64 @@ with st.sidebar:
         with col1:
             if st.button(chat_name, key=f"chat_{chat_id}", use_container_width=True):
                 st.session_state.current_chat_id = chat_id
+                st.query_params["chat_id"] = chat_id
                 st.rerun()
         with col2:
             if st.button("🗑️", key=f"del_{chat_id}"):
                 delete_chat(chat_id)
                 del chats_dictionary[chat_id]
                 if st.session_state.current_chat_id == chat_id:
-                    valid_chats = [cid for cid, hist in chats_dictionary.items() if len(hist) > 0]
-                    st.session_state.current_chat_id = valid_chats[-1] if valid_chats else "PENDING"
+                    st.session_state.current_chat_id = None
+                    if "chat_id" in st.query_params:
+                        del st.query_params["chat_id"]
                 st.rerun()
 
 # ==========================================
-# INPUT & CHAT INITIALIZATION
+# RETRIEVE ACTIVE CHAT HISTORY
 # ==========================================
 active_id = st.session_state.current_chat_id
-if active_id == "PENDING":
-    active_history = []
-else:
-    if active_id not in chats_dictionary:
-        chats_dictionary[active_id] = []
+if active_id and active_id in chats_dictionary:
     active_history = chats_dictionary[active_id]
+else:
+    active_history = []
 
 user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
 
 # ==========================================
-# RENDER UI CONTAINERS 
+# UI CONTAINERS
 # ==========================================
 welcome_placeholder = st.empty()
 chat_box = st.container()
 pills_placeholder = st.empty()
 
-# ==========================================
-# POPULATE UI CONTAINERS
-# ==========================================
 suggestion_clicked = None
 prompt_clicked = None
 
-# Draw the Adaptive Welcome Screen
-if len(active_history) == 0:
+# Display welcome cards ONLY when there is no active chat history
+if not active_history:
     with welcome_placeholder.container():
         _, center_col, _ = st.columns([1, 3, 1])
-        
         with center_col:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
-            # Dropped hardcoded colors; relies on Streamlit's native theme-aware text colors
             st.markdown("<h2 style='text-align: center; font-size: 2.2rem; margin-bottom: 5px;'>How can I help you today?</h2>", unsafe_allow_html=True)
-            # Opacity creates a subtle, sober gray look that works on both dark and light backgrounds
             st.markdown("<p style='text-align: center; font-size: 1.05rem; margin-top: 0px; opacity: 0.7;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
-            
-            if st.session_state.is_first_launch:
-                prompts = st.session_state.welcome_prompts
-                c1, c2 = st.columns(2)
-                
-                with c1:
-                    if st.button(prompts[0], use_container_width=True): prompt_clicked = prompts[0]
-                    if st.button(prompts[2], use_container_width=True): prompt_clicked = prompts[2]
-                with c2:
-                    if st.button(prompts[1], use_container_width=True): prompt_clicked = prompts[1]
-                    if st.button(prompts[3], use_container_width=True): prompt_clicked = prompts[3]
 
-# Draw AI Suggestions (Pills)
+            prompts = st.session_state.welcome_prompts
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button(prompts[0], use_container_width=True): prompt_clicked = prompts[0]
+                if st.button(prompts[2], use_container_width=True): prompt_clicked = prompts[2]
+            with c2:
+                if st.button(prompts[1], use_container_width=True): prompt_clicked = prompts[1]
+                if st.button(prompts[3], use_container_width=True): prompt_clicked = prompts[3]
+
+# AI Quick Replies
 if not user_input and active_history and active_history[-1]["role"] == "assistant":
     last_msg = active_history[-1]["content"]
     if "===SUGGESTIONS===" in last_msg:
         sug_text = last_msg.split("===SUGGESTIONS===")[1].strip()
         suggestions = [s.strip("- 1234567890.*") for s in sug_text.split("\n") if s.strip()]
-
         if suggestions:
             with pills_placeholder.container():
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -209,7 +209,7 @@ if not user_input and active_history and active_history[-1]["role"] == "assistan
 
 is_new_message = bool(user_input or suggestion_clicked or prompt_clicked)
 
-# Draw chat history inside the middle container
+# Render conversation messages
 with chat_box:
     for msg in active_history:
         with st.chat_message(msg["role"]):
@@ -223,19 +223,17 @@ with chat_box:
                         st.write(tool_name)
 
             display_text = msg["content"].split("===SUGGESTIONS===")[0].strip()
-
             if msg["role"] == "user":
                 st.markdown(display_text.replace("\n", "  \n"))
             else:
                 st.markdown(display_text)
 
 # ==========================================
-# PROCESS NEW MESSAGE
+# PROCESS NEW MESSAGE & LAZY ID CREATION
 # ==========================================
 if is_new_message:
     welcome_placeholder.empty()
     pills_placeholder.empty()
-    st.session_state.is_first_launch = False 
 
     user_text = ""
     uploaded_files = []
@@ -248,12 +246,14 @@ if is_new_message:
     elif prompt_clicked:
         user_text = prompt_clicked
 
-    if st.session_state.current_chat_id == "PENDING":
-        new_id = str(uuid.uuid4())[:6]
-        chats_dictionary[new_id] = []
+    # LAZY ID CREATION: Generate session ID only upon first message submission
+    if not st.session_state.current_chat_id:
+        new_id = str(uuid.uuid4())[:8]
         st.session_state.current_chat_id = new_id
+        st.query_params["chat_id"] = new_id
         active_id = new_id
-        active_history = chats_dictionary[new_id]
+        chats_dictionary[active_id] = []
+        active_history = chats_dictionary[active_id]
 
     file_name = None
     extracted_text = ""
