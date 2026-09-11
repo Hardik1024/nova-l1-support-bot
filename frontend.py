@@ -19,6 +19,7 @@ load_dotenv()
 # ==========================================
 st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
 
+# Kept ONLY the safe background styling. All broken sidebar CSS is completely REMOVED.
 st.markdown("""
 <style>
     .stApp {
@@ -26,19 +27,6 @@ st.markdown("""
     }
     .block-container {
         padding-top: 3rem;
-    }
-    
-    /* Force sidebar to fill the screen height and act as a flex column */
-    [data-testid="stSidebarUserContent"] {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-    }
-    
-    /* Target the very last element in the sidebar (Reset Button) and push it to the bottom */
-    [data-testid="stSidebarUserContent"] > div:last-child {
-        margin-top: auto;
-        padding-bottom: 20px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -73,7 +61,6 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def get_user_chats(user_id):
     """Pulls all previous chats for this specific user from the cloud and orders them."""
-    # Added .order("created_at", desc=False) to ensure older chats appear first
     response = supabase.table("Chats").select("*").eq("user_id", user_id).order("created_at", desc=False).execute()
     chats = {}
     for row in response.data:
@@ -98,18 +85,15 @@ def delete_chat(session_id):
 cookie_manager = stx.CookieManager(key="nova_cookie_manager")
 
 if "user_id" not in st.session_state:
-    # 1. Force Python to WAIT for the browser to send the cookie data on first load/refresh
     if "cookie_timer" not in st.session_state:
         st.session_state.cookie_timer = True
-        st.stop() # Safely halts the script for a split-second to let the cookie load!
+        st.stop() 
         
-    # 2. After the tiny pause, safely read the cookie
     cookie_user_id = cookie_manager.get(cookie="nova_user_id")
     
     if cookie_user_id:
         st.session_state.user_id = cookie_user_id
     else:
-        # 3. If genuinely empty, generate a new ID
         new_id = str(uuid.uuid4())[:8]
         st.session_state.user_id = new_id
         expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
@@ -129,7 +113,6 @@ if "current_chat_id" not in st.session_state:
     else:
         st.session_state.current_chat_id = None
 
-# Lock ONLY the chat_id into the URL so it survives refreshes
 if st.session_state.current_chat_id:
     st.query_params["chat_id"] = st.session_state.current_chat_id
 elif "chat_id" in st.query_params:
@@ -137,13 +120,12 @@ elif "chat_id" in st.query_params:
 
 
 # ==========================================
-# SIDEBAR
+# SIDEBAR (CLEAN, NATIVE STREAMLIT)
 # ==========================================
-
 with st.sidebar:
     st.title("💠 Nova")
 
-    # 1. New Chat Button (Top, standard color)
+    # 1. New Chat Button (No red color, natural spacing)
     if st.button("+ New Chat", use_container_width=True):
         st.session_state.current_chat_id = None
         if "chat_id" in st.query_params:
@@ -155,7 +137,7 @@ with st.sidebar:
     st.divider()
     st.write("**Previous Chats**")
 
-    # 2. Native Chat History List (Middle, natural scrolling)
+    # 2. Native Chat History List
     for chat_id, history in list(chats_dictionary.items()):
         if not history:
             continue
@@ -183,7 +165,7 @@ with st.sidebar:
                         del st.query_params["chat_id"]
                 st.rerun()
 
-    # 3. Reset Profile Button (Bottom, beneath all chats)
+    # 3. Reset Profile Button (Sits naturally below the chats)
     st.divider()
     if st.button("⚙️ Reset Profile & Clear Data", use_container_width=True):
         fresh_id = str(uuid.uuid4())[:8]
@@ -196,6 +178,7 @@ with st.sidebar:
         
         st.query_params.clear()
         st.rerun()
+
 
 # ==========================================
 # RETRIEVE ACTIVE CHAT HISTORY
