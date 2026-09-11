@@ -130,7 +130,7 @@ elif "chat_id" in st.query_params:
 with st.sidebar:
     st.title("💠 Nova")
 
-    # 1. Action Buttons (Always visible at the top, standard color)
+    # 1. New Chat Button (Top, standard color)
     if st.button("+ New Chat", use_container_width=True):
         st.session_state.current_chat_id = None
         if "chat_id" in st.query_params:
@@ -139,22 +139,10 @@ with st.sidebar:
         st.session_state.welcome_prompts = random.sample(PROMPT_POOL, 4)
         st.rerun()
 
-    if st.button("⚙️ Reset Profile", use_container_width=True):
-        fresh_id = str(uuid.uuid4())[:8]
-        expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
-        
-        cookie_manager.set("nova_user_id", fresh_id, expires_at=expire_date)
-        
-        st.session_state.clear()
-        st.session_state.user_id = fresh_id
-        
-        st.query_params.clear()
-        st.rerun()
-
     st.divider()
     st.write("**Previous Chats**")
 
-    # 2. Native Chat History List (Lets the sidebar scroll naturally)
+    # 2. Native Chat History List (Middle, natural scrolling)
     for chat_id, history in list(chats_dictionary.items()):
         if not history:
             continue
@@ -181,6 +169,20 @@ with st.sidebar:
                     if "chat_id" in st.query_params:
                         del st.query_params["chat_id"]
                 st.rerun()
+
+    # 3. Reset Profile Button (Bottom, beneath all chats)
+    st.divider()
+    if st.button("⚙️ Reset Profile & Clear Data", use_container_width=True):
+        fresh_id = str(uuid.uuid4())[:8]
+        expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
+        
+        cookie_manager.set("nova_user_id", fresh_id, expires_at=expire_date)
+        
+        st.session_state.clear()
+        st.session_state.user_id = fresh_id
+        
+        st.query_params.clear()
+        st.rerun()
 
 # ==========================================
 # RETRIEVE ACTIVE CHAT HISTORY
