@@ -27,6 +27,19 @@ st.markdown("""
     .block-container {
         padding-top: 3rem;
     }
+    
+    /* Force sidebar to fill the screen height and act as a flex column */
+    [data-testid="stSidebarUserContent"] {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+    }
+    
+    /* Target the very last element in the sidebar (Reset Button) and push it to the bottom */
+    [data-testid="stSidebarUserContent"] > div:last-child {
+        margin-top: auto;
+        padding-bottom: 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
