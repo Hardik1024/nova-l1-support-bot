@@ -5,6 +5,8 @@ import docx
 import base64
 import random
 import os
+import datetime
+import extra_streamlit_components as stx
 from pypdf import PdfReader
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -50,15 +52,15 @@ if "welcome_prompts" not in st.session_state:
 # ==========================================
 # SUPABASE DATABASE SETUP
 # ==========================================
-SUPABASE_URL = os.getenv("https://ddzqicgqoiupculnevxm.supabase.co/rest/v1/")
-SUPABASE_KEY = os.getenv("sb_publishable_iMFaggd8kVo_aAe9aM7FiQ_J3UB9nSp")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 # Initialize the Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def get_user_chats(user_id):
     """Pulls all previous chats for this specific user from the cloud."""
-    response = supabase.table("chats").select("*").eq("user_id", user_id).execute()
+    response = supabase.table("Chats").select("*").eq("user_id", user_id).execute()
     chats = {}
     for row in response.data:
         chats[row["session_id"]] = row["history"]
@@ -66,7 +68,7 @@ def get_user_chats(user_id):
 
 def save_chat(session_id, user_id, history):
     """Pushes a new message to the cloud. Upsert automatically updates existing chats."""
-    supabase.table("chats").upsert({
+    supabase.table("Chats").upsert({
         "session_id": session_id,
         "user_id": user_id,
         "history": history
@@ -74,13 +76,24 @@ def save_chat(session_id, user_id, history):
 
 def delete_chat(session_id):
     """Deletes a specific chat history from the cloud database."""
-    supabase.table("chats").delete().eq("session_id", session_id).execute()
+    supabase.table("Chats").delete().eq("session_id", session_id).execute()
 
 # ==========================================
-# USER IDENTITY (PERSISTENT IN SESSION STATE ONLY)
+# USER IDENTITY (PERSISTENT VIA BROWSER COOKIES)
 # ==========================================
-if "user_id" not in st.session_state:
-    st.session_state.user_id = st.query_params.get("user_id", str(uuid.uuid4())[:8])
+cookie_manager = stx.CookieManager(key="nova_cookie_manager")
+cookie_user_id = cookie_manager.get(cookie="nova_user_id")
+
+if cookie_user_id:
+    # If the browser has a cookie, recognize the returning user
+    st.session_state.user_id = cookie_user_id
+elif "user_id" not in st.session_state:
+    # If it is a first-time visitor, generate a new ID
+    new_id = str(uuid.uuid4())[:8]
+    st.session_state.user_id = new_id
+    # Save this ID in their browser cookie for 1 year (365 days)
+    expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
+    cookie_manager.set("nova_user_id", new_id, expires_at=expire_date)
 
 user_id = st.session_state.user_id
 chats_dictionary = get_user_chats(user_id)
@@ -101,8 +114,6 @@ if st.session_state.current_chat_id:
 elif "chat_id" in st.query_params:
     del st.query_params["chat_id"]
 
-if "user_id" in st.query_params:
-    del st.query_params["user_id"]
 
 # ==========================================
 # SIDEBAR
