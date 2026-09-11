@@ -59,8 +59,9 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def get_user_chats(user_id):
-    """Pulls all previous chats for this specific user from the cloud."""
-    response = supabase.table("Chats").select("*").eq("user_id", user_id).execute()
+    """Pulls all previous chats for this specific user from the cloud and orders them."""
+    # Added .order("created_at", desc=False) to ensure older chats appear first
+    response = supabase.table("Chats").select("*").eq("user_id", user_id).order("created_at", desc=False).execute()
     chats = {}
     for row in response.data:
         chats[row["session_id"]] = row["history"]
@@ -79,21 +80,27 @@ def delete_chat(session_id):
     supabase.table("Chats").delete().eq("session_id", session_id).execute()
 
 # ==========================================
-# USER IDENTITY (PERSISTENT VIA BROWSER COOKIES)
+# USER IDENTITY (RACE-CONDITION FIX)
 # ==========================================
 cookie_manager = stx.CookieManager(key="nova_cookie_manager")
-cookie_user_id = cookie_manager.get(cookie="nova_user_id")
 
-if cookie_user_id:
-    # If the browser has a cookie, recognize the returning user
-    st.session_state.user_id = cookie_user_id
-elif "user_id" not in st.session_state:
-    # If it is a first-time visitor, generate a new ID
-    new_id = str(uuid.uuid4())[:8]
-    st.session_state.user_id = new_id
-    # Save this ID in their browser cookie for 1 year (365 days)
-    expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
-    cookie_manager.set("nova_user_id", new_id, expires_at=expire_date)
+if "user_id" not in st.session_state:
+    # 1. Force Python to WAIT for the browser to send the cookie data on first load/refresh
+    if "cookie_timer" not in st.session_state:
+        st.session_state.cookie_timer = True
+        st.stop() # Safely halts the script for a split-second to let the cookie load!
+        
+    # 2. After the tiny pause, safely read the cookie
+    cookie_user_id = cookie_manager.get(cookie="nova_user_id")
+    
+    if cookie_user_id:
+        st.session_state.user_id = cookie_user_id
+    else:
+        # 3. If genuinely empty, generate a new ID
+        new_id = str(uuid.uuid4())[:8]
+        st.session_state.user_id = new_id
+        expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
+        cookie_manager.set("nova_user_id", new_id, expires_at=expire_date)
 
 user_id = st.session_state.user_id
 chats_dictionary = get_user_chats(user_id)
@@ -109,6 +116,7 @@ if "current_chat_id" not in st.session_state:
     else:
         st.session_state.current_chat_id = None
 
+# Lock ONLY the chat_id into the URL so it survives refreshes
 if st.session_state.current_chat_id:
     st.query_params["chat_id"] = st.session_state.current_chat_id
 elif "chat_id" in st.query_params:
