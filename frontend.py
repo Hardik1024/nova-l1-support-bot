@@ -138,6 +138,15 @@ with st.sidebar:
         st.session_state.welcome_prompts = random.sample(PROMPT_POOL, 4)
         st.rerun()
 
+    # --- NEW: Reset Identity Button ---
+    if st.button("🔄 Reset Profile", use_container_width=True):
+        cookie_manager.delete("nova_user_id")
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.query_params.clear()
+        st.rerun()
+    # ----------------------------------
+
     st.divider()
     st.write("Previous Chats:")
 
