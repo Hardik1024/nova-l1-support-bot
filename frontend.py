@@ -78,8 +78,12 @@ def delete_chat(session_id):
     """Deletes a specific chat history from the cloud database."""
     supabase.table("Chats").delete().eq("session_id", session_id).execute()
 
+def delete_user_chats(user_id):
+    """Wipes all chats belonging to a specific user from the cloud database."""
+    supabase.table("Chats").delete().eq("user_id", user_id).execute()
+
 # ==========================================
-# USER IDENTITY (ROBUST RESET & RACE-CONDITION FIX)
+# USER IDENTITY (RACE-CONDITION FIX)
 # ==========================================
 cookie_manager = stx.CookieManager(key="nova_cookie_manager")
 
@@ -88,23 +92,15 @@ if "user_id" not in st.session_state:
         st.session_state.cookie_timer = True
         st.stop() 
         
-    if st.query_params.get("reset") == "true":
+    cookie_user_id = cookie_manager.get(cookie="nova_user_id")
+    
+    if cookie_user_id:
+        st.session_state.user_id = cookie_user_id
+    else:
         new_id = str(uuid.uuid4())[:8]
         st.session_state.user_id = new_id
         expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
         cookie_manager.set("nova_user_id", new_id, expires_at=expire_date)
-        if "reset" in st.query_params:
-            del st.query_params["reset"]
-    else:
-        cookie_user_id = cookie_manager.get(cookie="nova_user_id")
-        
-        if cookie_user_id:
-            st.session_state.user_id = cookie_user_id
-        else:
-            new_id = str(uuid.uuid4())[:8]
-            st.session_state.user_id = new_id
-            expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
-            cookie_manager.set("nova_user_id", new_id, expires_at=expire_date)
 
 user_id = st.session_state.user_id
 chats_dictionary = get_user_chats(user_id)
@@ -169,11 +165,21 @@ with st.sidebar:
                         del st.query_params["chat_id"]
                 st.rerun()
 
+    # Reset Profile Button (Wipes Supabase data + Rotates ID)
     st.divider()
     if st.button("🔄 Reset Profile", use_container_width=True):
+        # 1. Permanently delete all chats for this user from Supabase
+        if "user_id" in st.session_state:
+            delete_user_chats(st.session_state.user_id)
+            
+        # 2. Generate a fresh ID and update cookie/session
+        fresh_id = str(uuid.uuid4())[:8]
+        expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
+        cookie_manager.set("nova_user_id", fresh_id, expires_at=expire_date)
+        
         st.session_state.clear()
+        st.session_state.user_id = fresh_id
         st.query_params.clear()
-        st.query_params["reset"] = "true"
         st.rerun()
 
 # ==========================================
