@@ -19,7 +19,6 @@ load_dotenv()
 # ==========================================
 st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
 
-# Kept ONLY the safe background styling. All broken sidebar CSS is completely REMOVED.
 st.markdown("""
 <style>
     .stApp {
@@ -80,7 +79,7 @@ def delete_chat(session_id):
     supabase.table("Chats").delete().eq("session_id", session_id).execute()
 
 # ==========================================
-# USER IDENTITY (RACE-CONDITION FIX)
+# USER IDENTITY (ROBUST RESET & RACE-CONDITION FIX)
 # ==========================================
 cookie_manager = stx.CookieManager(key="nova_cookie_manager")
 
@@ -89,15 +88,23 @@ if "user_id" not in st.session_state:
         st.session_state.cookie_timer = True
         st.stop() 
         
-    cookie_user_id = cookie_manager.get(cookie="nova_user_id")
-    
-    if cookie_user_id:
-        st.session_state.user_id = cookie_user_id
-    else:
+    if st.query_params.get("reset") == "true":
         new_id = str(uuid.uuid4())[:8]
         st.session_state.user_id = new_id
         expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
         cookie_manager.set("nova_user_id", new_id, expires_at=expire_date)
+        if "reset" in st.query_params:
+            del st.query_params["reset"]
+    else:
+        cookie_user_id = cookie_manager.get(cookie="nova_user_id")
+        
+        if cookie_user_id:
+            st.session_state.user_id = cookie_user_id
+        else:
+            new_id = str(uuid.uuid4())[:8]
+            st.session_state.user_id = new_id
+            expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
+            cookie_manager.set("nova_user_id", new_id, expires_at=expire_date)
 
 user_id = st.session_state.user_id
 chats_dictionary = get_user_chats(user_id)
@@ -118,14 +125,12 @@ if st.session_state.current_chat_id:
 elif "chat_id" in st.query_params:
     del st.query_params["chat_id"]
 
-
 # ==========================================
 # SIDEBAR (CLEAN, NATIVE STREAMLIT)
 # ==========================================
 with st.sidebar:
     st.title("💠 Nova")
 
-    # 1. New Chat Button (No red color, natural spacing)
     if st.button("+ New Chat", use_container_width=True):
         st.session_state.current_chat_id = None
         if "chat_id" in st.query_params:
@@ -137,7 +142,6 @@ with st.sidebar:
     st.divider()
     st.write("**Previous Chats**")
 
-    # 2. Native Chat History List
     for chat_id, history in list(chats_dictionary.items()):
         if not history:
             continue
@@ -165,20 +169,12 @@ with st.sidebar:
                         del st.query_params["chat_id"]
                 st.rerun()
 
-    # 3. Reset Profile Button (Sits naturally below the chats)
     st.divider()
     if st.button("🔄 Reset Profile", use_container_width=True):
-        fresh_id = str(uuid.uuid4())[:8]
-        expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
-        
-        cookie_manager.set("nova_user_id", fresh_id, expires_at=expire_date)
-        
         st.session_state.clear()
-        st.session_state.user_id = fresh_id
-        
         st.query_params.clear()
+        st.query_params["reset"] = "true"
         st.rerun()
-
 
 # ==========================================
 # RETRIEVE ACTIVE CHAT HISTORY
@@ -201,7 +197,6 @@ pills_placeholder = st.empty()
 suggestion_clicked = None
 prompt_clicked = None
 
-# Show welcome screen EVERY time the active history is empty
 if not active_history:
     with welcome_placeholder.container():
         _, center_col, _ = st.columns([1, 3, 1])
@@ -220,7 +215,6 @@ if not active_history:
                 if st.button(prompts[1], use_container_width=True): prompt_clicked = prompts[1]
                 if st.button(prompts[3], use_container_width=True): prompt_clicked = prompts[3]
 
-# AI Suggestions
 if not user_input and active_history and active_history[-1]["role"] == "assistant":
     last_msg = active_history[-1]["content"]
     if "===SUGGESTIONS===" in last_msg:
@@ -235,7 +229,6 @@ if not user_input and active_history and active_history[-1]["role"] == "assistan
 
 is_new_message = bool(user_input or suggestion_clicked or prompt_clicked)
 
-# Render conversation messages
 with chat_box:
     for msg in active_history:
         with st.chat_message(msg["role"]):
