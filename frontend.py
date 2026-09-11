@@ -130,8 +130,8 @@ elif "chat_id" in st.query_params:
 with st.sidebar:
     st.title("💠 Nova")
 
-    # 1. New Chat Button (Fixed at Top)
-    if st.button("+ New Chat", use_container_width=True, type="primary"):
+    # 1. Action Buttons (Always visible at the top, standard color)
+    if st.button("+ New Chat", use_container_width=True):
         st.session_state.current_chat_id = None
         if "chat_id" in st.query_params:
             del st.query_params["chat_id"]
@@ -139,44 +139,7 @@ with st.sidebar:
         st.session_state.welcome_prompts = random.sample(PROMPT_POOL, 4)
         st.rerun()
 
-    st.divider()
-    st.write("**Previous Chats**")
-
-    # 2. Scrollable Chat History Container (Middle)
-    # The height=400 forces a scrollbar to appear just for the chats if they overflow!
-    chat_list_container = st.container(height=400, border=False)
-    
-    with chat_list_container:
-        for chat_id, history in list(chats_dictionary.items()):
-            if not history:
-                continue
-            chat_name = "New Chat"
-            for message in history:
-                if message["role"] == "user":
-                    chat_name = message["content"][:18]
-                    if len(message["content"]) > 18:
-                        chat_name += "..."
-                    break
-
-            col1, col2 = st.columns([8, 2])
-            with col1:
-                if st.button(chat_name, key=f"chat_{chat_id}", use_container_width=True):
-                    st.session_state.current_chat_id = chat_id
-                    st.query_params["chat_id"] = chat_id
-                    st.rerun()
-            with col2:
-                if st.button("🗑️", key=f"del_{chat_id}"):
-                    delete_chat(chat_id)
-                    del chats_dictionary[chat_id]
-                    if st.session_state.current_chat_id == chat_id:
-                        st.session_state.current_chat_id = None
-                        if "chat_id" in st.query_params:
-                            del st.query_params["chat_id"]
-                    st.rerun()
-
-    # 3. Reset Profile Button (Fixed at Bottom)
-    st.divider()
-    if st.button("⚙️ Reset Profile & Clear Data", use_container_width=True):
+    if st.button("⚙️ Reset Profile", use_container_width=True):
         fresh_id = str(uuid.uuid4())[:8]
         expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
         
@@ -187,6 +150,37 @@ with st.sidebar:
         
         st.query_params.clear()
         st.rerun()
+
+    st.divider()
+    st.write("**Previous Chats**")
+
+    # 2. Native Chat History List (Lets the sidebar scroll naturally)
+    for chat_id, history in list(chats_dictionary.items()):
+        if not history:
+            continue
+        chat_name = "New Chat"
+        for message in history:
+            if message["role"] == "user":
+                chat_name = message["content"][:18]
+                if len(message["content"]) > 18:
+                    chat_name += "..."
+                break
+
+        col1, col2 = st.columns([8, 2])
+        with col1:
+            if st.button(chat_name, key=f"chat_{chat_id}", use_container_width=True):
+                st.session_state.current_chat_id = chat_id
+                st.query_params["chat_id"] = chat_id
+                st.rerun()
+        with col2:
+            if st.button("🗑️", key=f"del_{chat_id}"):
+                delete_chat(chat_id)
+                del chats_dictionary[chat_id]
+                if st.session_state.current_chat_id == chat_id:
+                    st.session_state.current_chat_id = None
+                    if "chat_id" in st.query_params:
+                        del st.query_params["chat_id"]
+                st.rerun()
 
 # ==========================================
 # RETRIEVE ACTIVE CHAT HISTORY
