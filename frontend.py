@@ -167,7 +167,7 @@ with st.sidebar:
 
     # 3. Reset Profile Button (Sits naturally below the chats)
     st.divider()
-    if st.button("⚙️ Reset Profile & Clear Data", use_container_width=True):
+    if st.button("🔄 Reset Profile", use_container_width=True):
         fresh_id = str(uuid.uuid4())[:8]
         expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
         
