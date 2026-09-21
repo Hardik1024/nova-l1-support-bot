@@ -204,12 +204,6 @@ if "local_active_history" in st.session_state and st.session_state.local_active_
     if len(st.session_state.local_active_history) > len(active_history):
         active_history = st.session_state.local_active_history
 
-# --- DISCLAIMER PLACED RIGHT ABOVE CHAT INPUT ---
-st.markdown(
-    "<div style='text-align: center; font-size: 0.75rem; color: #888888; margin-top: 10px; margin-bottom: -5px;'>Nova is an AI assistant and may make mistakes. Please verify critical information before taking action.</div>", 
-    unsafe_allow_html=True
-)
-
 user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
 
 # ==========================================
@@ -421,3 +415,11 @@ if is_new_message:
     st.session_state.local_active_history = active_history
 
     st.rerun()
+
+# ==========================================
+# DISCLAIMER FOOTER (NOW PLACED AT THE VERY BOTTOM UNDER THE CHAT INPUT)
+# ==========================================
+st.markdown(
+    "<div style='text-align: center; font-size: 0.75rem; color: #888888; margin-top: 5px; margin-bottom: 5px;'>Nova is an AI assistant and may make mistakes. Please verify critical information before taking action.</div>", 
+    unsafe_allow_html=True
+)
