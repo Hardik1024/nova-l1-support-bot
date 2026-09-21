@@ -19,6 +19,7 @@ load_dotenv()
 # ==========================================
 st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
 
+# Added scrollbar-gutter: stable to fix the Streamlit rapid scrolling jitter bug
 st.markdown("""
 <style>
     .stApp {
@@ -26,6 +27,9 @@ st.markdown("""
     }
     .block-container {
         padding-top: 3rem;
+    }
+    [data-testid="stAppViewContainer"] {
+        scrollbar-gutter: stable;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -161,14 +165,11 @@ with st.sidebar:
                         del st.query_params["chat_id"]
                 st.rerun()
 
-    # Reset Profile Button (Wipes Supabase data + Rotates ID)
     st.divider()
     if st.button("🔄 Reset Profile", use_container_width=True):
-        # 1. Permanently delete all chats for this user from Supabase
         if "user_id" in st.session_state:
             delete_user_chats(st.session_state.user_id)
             
-        # 2. Generate a fresh ID and update cookie/session
         fresh_id = str(uuid.uuid4())[:8]
         expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
         cookie_manager.set("nova_user_id", fresh_id, expires_at=expire_date)
@@ -190,15 +191,18 @@ else:
 user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
 
 # ==========================================
-# UI CONTAINERS
+# UI CONTAINERS & CALLBACKS
 # ==========================================
+def handle_quick_reply(text):
+    st.session_state.pending_prompt = text
+
 chat_box = st.container()
 
-suggestion_clicked = None
-prompt_clicked = None
+pending_text = st.session_state.pop("pending_prompt", None)
+is_new_message = bool(user_input or pending_text)
 
-# Draw Welcome Screen ONLY if there is no chat history AND the user hasn't typed anything
-if not active_history and not user_input:
+# ONLY draw Welcome Screen if history is completely empty AND user isn't clicking anything
+if not active_history and not is_new_message:
     _, center_col, _ = st.columns([1, 3, 1])
     with center_col:
         st.markdown("<br><br><br>", unsafe_allow_html=True)
@@ -209,14 +213,14 @@ if not active_history and not user_input:
         prompts = st.session_state.welcome_prompts
         c1, c2 = st.columns(2)
         with c1:
-            if st.button(prompts[0], use_container_width=True): prompt_clicked = prompts[0]
-            if st.button(prompts[2], use_container_width=True): prompt_clicked = prompts[2]
+            st.button(prompts[0], use_container_width=True, on_click=handle_quick_reply, args=(prompts[0],))
+            st.button(prompts[2], use_container_width=True, on_click=handle_quick_reply, args=(prompts[2],))
         with c2:
-            if st.button(prompts[1], use_container_width=True): prompt_clicked = prompts[1]
-            if st.button(prompts[3], use_container_width=True): prompt_clicked = prompts[3]
+            st.button(prompts[1], use_container_width=True, on_click=handle_quick_reply, args=(prompts[1],))
+            st.button(prompts[3], use_container_width=True, on_click=handle_quick_reply, args=(prompts[3],))
 
-# Draw Quick Replies (Pills) ONLY if the last message was from the bot
-if not user_input and not prompt_clicked and active_history and active_history[-1]["role"] == "assistant":
+# Draw Quick Replies (Pills) ONLY if the last message was from the bot and no new message is incoming
+if not is_new_message and active_history and active_history[-1]["role"] == "assistant":
     last_msg = active_history[-1]["content"]
     if "===SUGGESTIONS===" in last_msg:
         sug_text = last_msg.split("===SUGGESTIONS===")[1].strip()
@@ -225,9 +229,8 @@ if not user_input and not prompt_clicked and active_history and active_history[-
             st.markdown("<br>", unsafe_allow_html=True)
             selection = st.pills("Quick Replies:", options=suggestions, label_visibility="collapsed", key=f"pills_{len(active_history)}")
             if selection:
-                suggestion_clicked = selection
-
-is_new_message = bool(user_input or suggestion_clicked or prompt_clicked)
+                handle_quick_reply(selection)
+                st.rerun()
 
 with chat_box:
     for msg in active_history:
@@ -257,10 +260,8 @@ if is_new_message:
     if user_input:
         user_text = user_input.text.strip()
         uploaded_files = user_input.files
-    elif suggestion_clicked:
-        user_text = suggestion_clicked
-    elif prompt_clicked:
-        user_text = prompt_clicked
+    elif pending_text:
+        user_text = pending_text
 
     if not st.session_state.current_chat_id:
         new_id = str(uuid.uuid4())[:8]
