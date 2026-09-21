@@ -80,25 +80,26 @@ def delete_user_chats(user_id):
 # ==========================================
 # TIME HELPERS (AZURE BULLETPROOF IST)
 # ==========================================
-# Hardcoded UTC+5:30 prevents ZoneInfo crashes on Azure Linux containers
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
 def get_chat_separator_time(iso_string):
-    """Converts a saved timestamp into ChatGPT style: 'Today 1:09 PM' or 'Sep 21, 2026, 3:30 PM'"""
-    if not iso_string:
-        return ""
+    """Generates the centered 'Today 1:09 PM' separator"""
+    if not iso_string: return ""
     try:
         dt = datetime.datetime.fromisoformat(iso_string)
         now = datetime.datetime.now(IST)
-        
-        if dt.date() == now.date():
-            return f"Today {dt.strftime('%I:%M %p')}"
-        elif dt.date() == now.date() - datetime.timedelta(days=1):
-            return f"Yesterday {dt.strftime('%I:%M %p')}"
-        else:
-            return dt.strftime("%b %d, %Y, %I:%M %p")
-    except Exception:
-        return ""
+        if dt.date() == now.date(): return f"Today {dt.strftime('%I:%M %p')}"
+        elif dt.date() == now.date() - datetime.timedelta(days=1): return f"Yesterday {dt.strftime('%I:%M %p')}"
+        else: return dt.strftime("%b %d, %Y, %I:%M %p")
+    except Exception: return ""
+
+def get_formatted_time(iso_string):
+    """Generates the tiny timestamp under the bot's answers"""
+    if not iso_string: return ""
+    try:
+        dt = datetime.datetime.fromisoformat(iso_string)
+        return dt.strftime("%b %d, %Y, %I:%M %p")
+    except Exception: return ""
 
 # ==========================================
 # USER IDENTITY (RACE-CONDITION FIX)
@@ -260,7 +261,6 @@ with chat_box:
     
     for msg in active_history:
         # --- CHATGPT STYLE DATE SEPARATOR ---
-        # Checks if this message is from a new day and prints the centered date above it
         if "timestamp" in msg:
             try:
                 msg_dt = datetime.datetime.fromisoformat(msg["timestamp"]).date()
@@ -283,6 +283,10 @@ with chat_box:
 
             display_text = msg["content"].split("===SUGGESTIONS===")[0].strip()
             st.markdown(display_text.replace("\n", "  \n") if msg["role"] == "user" else display_text)
+            
+            # --- CLAUDE STYLE TIMESTAMP (ONLY FOR BOT ANSWERS) ---
+            if msg["role"] == "assistant" and "timestamp" in msg:
+                st.caption(f"{get_formatted_time(msg['timestamp'])}")
 
 # ==========================================
 # PROCESS NEW MESSAGE & LAZY ID CREATION
@@ -336,7 +340,6 @@ if is_new_message:
 
     # Render User Message immediately
     with chat_box:
-        # If this is the absolute first message today, draw the Date Separator dynamically
         current_iso_time = datetime.datetime.now(IST).isoformat()
         current_date_obj = datetime.datetime.fromisoformat(current_iso_time).date()
         if current_date_obj != last_date:
@@ -368,7 +371,6 @@ if is_new_message:
     active_history.append(user_message_data)
     save_chat(active_id, user_id, active_history)
     
-    # Cache local history to completely fix the "vanishing 1st message" bug
     st.session_state.local_active_id = active_id
     st.session_state.local_active_history = active_history
 
@@ -421,7 +423,6 @@ if is_new_message:
     active_history.append(assistant_message)
     save_chat(active_id, user_id, active_history)
     
-    # Cache local history again for the final run
     st.session_state.local_active_id = active_id
     st.session_state.local_active_history = active_history
 
