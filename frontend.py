@@ -93,14 +93,6 @@ def get_chat_separator_time(iso_string):
         else: return dt.strftime("%b %d, %Y, %I:%M %p")
     except Exception: return ""
 
-def get_formatted_time(iso_string):
-    """Generates the tiny timestamp under the bot's answers"""
-    if not iso_string: return ""
-    try:
-        dt = datetime.datetime.fromisoformat(iso_string)
-        return dt.strftime("%b %d, %Y, %I:%M %p")
-    except Exception: return ""
-
 # ==========================================
 # USER IDENTITY (RACE-CONDITION FIX)
 # ==========================================
@@ -283,10 +275,6 @@ with chat_box:
 
             display_text = msg["content"].split("===SUGGESTIONS===")[0].strip()
             st.markdown(display_text.replace("\n", "  \n") if msg["role"] == "user" else display_text)
-            
-            # --- CLAUDE STYLE TIMESTAMP (ONLY FOR BOT ANSWERS) ---
-            if msg["role"] == "assistant" and "timestamp" in msg:
-                st.caption(f"{get_formatted_time(msg['timestamp'])}")
 
 # ==========================================
 # PROCESS NEW MESSAGE & LAZY ID CREATION
