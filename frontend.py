@@ -6,6 +6,7 @@ import base64
 import random
 import os
 import datetime
+from zoneinfo import ZoneInfo
 import extra_streamlit_components as stx
 from pypdf import PdfReader
 from dotenv import load_dotenv
@@ -19,6 +20,7 @@ load_dotenv()
 # ==========================================
 st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
 
+# Fixes Streamlit scrolling jitter
 st.markdown("""
 <style>
     .stApp {
@@ -26,6 +28,9 @@ st.markdown("""
     }
     .block-container {
         padding-top: 3rem;
+    }
+    [data-testid="stAppViewContainer"] {
+        scrollbar-gutter: stable;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -83,15 +88,24 @@ def delete_user_chats(user_id):
     supabase.table("Chats").delete().eq("user_id", user_id).execute()
 
 # ==========================================
+# TIME HELPERS
+# ==========================================
+def get_formatted_time(iso_string):
+    """Converts a saved timestamp into a clean, Claude-style format"""
+    if not iso_string:
+        return ""
+    try:
+        dt = datetime.datetime.fromisoformat(iso_string)
+        return dt.strftime("%b %d, %Y, %I:%M %p")
+    except Exception:
+        return ""
+
+# ==========================================
 # USER IDENTITY (RACE-CONDITION FIX)
 # ==========================================
 cookie_manager = stx.CookieManager(key="nova_cookie_manager")
 
 if "user_id" not in st.session_state:
-    if "cookie_timer" not in st.session_state:
-        st.session_state.cookie_timer = True
-        st.stop() 
-        
     cookie_user_id = cookie_manager.get(cookie="nova_user_id")
     
     if cookie_user_id:
@@ -165,14 +179,11 @@ with st.sidebar:
                         del st.query_params["chat_id"]
                 st.rerun()
 
-    # Reset Profile Button (Wipes Supabase data + Rotates ID)
     st.divider()
     if st.button("🔄 Reset Profile", use_container_width=True):
-        # 1. Permanently delete all chats for this user from Supabase
         if "user_id" in st.session_state:
             delete_user_chats(st.session_state.user_id)
             
-        # 2. Generate a fresh ID and update cookie/session
         fresh_id = str(uuid.uuid4())[:8]
         expire_date = datetime.datetime.now() + datetime.timedelta(days=365)
         cookie_manager.set("nova_user_id", fresh_id, expires_at=expire_date)
@@ -194,46 +205,46 @@ else:
 user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
 
 # ==========================================
-# UI CONTAINERS
+# UI CONTAINERS & CALLBACKS
 # ==========================================
-welcome_placeholder = st.empty()
+def handle_quick_reply(text):
+    st.session_state.pending_prompt = text
+
 chat_box = st.container()
-pills_placeholder = st.empty()
 
-suggestion_clicked = None
-prompt_clicked = None
+pending_text = st.session_state.pop("pending_prompt", None)
+is_new_message = bool(user_input or pending_text)
 
-if not active_history:
-    with welcome_placeholder.container():
-        _, center_col, _ = st.columns([1, 3, 1])
-        with center_col:
-            st.markdown("<br><br><br>", unsafe_allow_html=True)
-            st.markdown("<h2 style='text-align: center; font-size: 2.2rem; margin-bottom: 5px;'>How can I help you today?</h2>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; font-size: 1.05rem; margin-top: 0px; opacity: 0.7;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
+# ONLY draw Welcome Screen if history is completely empty AND user isn't clicking anything
+if not active_history and not is_new_message:
+    _, center_col, _ = st.columns([1, 3, 1])
+    with center_col:
+        st.markdown("<br><br><br>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center; font-size: 2.2rem; margin-bottom: 5px;'>How can I help you today?</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; font-size: 1.05rem; margin-top: 0px; opacity: 0.7;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
-            prompts = st.session_state.welcome_prompts
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button(prompts[0], use_container_width=True): prompt_clicked = prompts[0]
-                if st.button(prompts[2], use_container_width=True): prompt_clicked = prompts[2]
-            with c2:
-                if st.button(prompts[1], use_container_width=True): prompt_clicked = prompts[1]
-                if st.button(prompts[3], use_container_width=True): prompt_clicked = prompts[3]
+        prompts = st.session_state.welcome_prompts
+        c1, c2 = st.columns(2)
+        with c1:
+            st.button(prompts[0], use_container_width=True, on_click=handle_quick_reply, args=(prompts[0],))
+            st.button(prompts[2], use_container_width=True, on_click=handle_quick_reply, args=(prompts[2],))
+        with c2:
+            st.button(prompts[1], use_container_width=True, on_click=handle_quick_reply, args=(prompts[1],))
+            st.button(prompts[3], use_container_width=True, on_click=handle_quick_reply, args=(prompts[3],))
 
-if not user_input and active_history and active_history[-1]["role"] == "assistant":
+# Draw Quick Replies (Pills) ONLY if the last message was from the bot and no new message is incoming
+if not is_new_message and active_history and active_history[-1]["role"] == "assistant":
     last_msg = active_history[-1]["content"]
     if "===SUGGESTIONS===" in last_msg:
         sug_text = last_msg.split("===SUGGESTIONS===")[1].strip()
         suggestions = [s.strip("- 1234567890.*") for s in sug_text.split("\n") if s.strip()]
         if suggestions:
-            with pills_placeholder.container():
-                st.markdown("<br>", unsafe_allow_html=True)
-                selection = st.pills("Quick Replies:", options=suggestions, label_visibility="collapsed", key=f"pills_{len(active_history)}")
-                if selection:
-                    suggestion_clicked = selection
-
-is_new_message = bool(user_input or suggestion_clicked or prompt_clicked)
+            st.markdown("<br>", unsafe_allow_html=True)
+            selection = st.pills("Quick Replies:", options=suggestions, label_visibility="collapsed", key=f"pills_{len(active_history)}")
+            if selection:
+                handle_quick_reply(selection)
+                st.rerun()
 
 with chat_box:
     for msg in active_history:
@@ -252,24 +263,23 @@ with chat_box:
                 st.markdown(display_text.replace("\n", "  \n"))
             else:
                 st.markdown(display_text)
+                
+            # Render subtle Claude-style timestamp at the bottom
+            if "timestamp" in msg:
+                st.caption(f"{get_formatted_time(msg['timestamp'])}")
 
 # ==========================================
 # PROCESS NEW MESSAGE & LAZY ID CREATION
 # ==========================================
 if is_new_message:
-    welcome_placeholder.empty()
-    pills_placeholder.empty()
-
     user_text = ""
     uploaded_files = []
 
     if user_input:
         user_text = user_input.text.strip()
         uploaded_files = user_input.files
-    elif suggestion_clicked:
-        user_text = suggestion_clicked
-    elif prompt_clicked:
-        user_text = prompt_clicked
+    elif pending_text:
+        user_text = pending_text
 
     if not st.session_state.current_chat_id:
         new_id = str(uuid.uuid4())[:8]
@@ -315,7 +325,12 @@ if is_new_message:
     if file_name and not user_text:
         user_text = "Please analyze this attached file/image."
 
-    user_message_data = {"role": "user", "content": user_text}
+    # Save user message with IST timestamp
+    user_message_data = {
+        "role": "user", 
+        "content": user_text,
+        "timestamp": datetime.datetime.now(ZoneInfo("Asia/Kolkata")).isoformat()
+    }
     if file_name:
         user_message_data["file_name"] = file_name
     if image_base64:
@@ -362,11 +377,14 @@ if is_new_message:
                     for tool_name in tools_used:
                         st.write(tool_name)
 
-    assistant_message = {"role": "assistant", "content": bot_answer}
+    # Save assistant message with IST timestamp
+    assistant_message = {
+        "role": "assistant", 
+        "content": bot_answer,
+        "timestamp": datetime.datetime.now(ZoneInfo("Asia/Kolkata")).isoformat()
+    }
     if tools_used:
         assistant_message["tools"] = tools_used
 
     active_history.append(assistant_message)
     save_chat(active_id, user_id, active_history)
-
-    st.rerun()
