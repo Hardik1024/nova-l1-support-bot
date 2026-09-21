@@ -78,7 +78,7 @@ def delete_user_chats(user_id):
     supabase.table("Chats").delete().eq("user_id", user_id).execute()
 
 # ==========================================
-# TIME HELPERS (IST)
+# TIME HELPERS (AZURE BULLETPROOF IST)
 # ==========================================
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
@@ -204,13 +204,14 @@ if "local_active_history" in st.session_state and st.session_state.local_active_
     if len(st.session_state.local_active_history) > len(active_history):
         active_history = st.session_state.local_active_history
 
-user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
-
-# disclaimer pinned directly under the chat input box
+# --- DISCLAIMER PLACED RIGHT ABOVE CHAT INPUT ---
 st.markdown(
-    "<div style='text-align: center; font-size: 0.75rem; color: #888888; margin-top: -5px; margin-bottom: 10px;'>Nova is an AI assistant and may make mistakes. Please verify critical information before taking action.</div>", 
+    "<div style='text-align: center; font-size: 0.75rem; color: #888888; margin-top: 10px; margin-bottom: -5px;'>Nova is an AI assistant and may make mistakes. Please verify critical information before taking action.</div>", 
     unsafe_allow_html=True
 )
+
+user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
+
 # ==========================================
 # UI CONTAINERS & CHATGPT DATE SEPARATOR
 # ==========================================
