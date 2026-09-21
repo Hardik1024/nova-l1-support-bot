@@ -359,5 +359,3 @@ if is_new_message:
 
     active_history.append(assistant_message)
     save_chat(active_id, user_id, active_history)
-
-    st.rerun()
