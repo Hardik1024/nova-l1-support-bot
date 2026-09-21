@@ -27,6 +27,21 @@ st.markdown("""
     .block-container {
         padding-top: 3rem;
     }
+    
+    /* --- CSS HACK: INJECT DISCLAIMER UNDER CHAT INPUT --- */
+    [data-testid="stChatInput"] {
+        padding-bottom: 25px !important;
+    }
+    [data-testid="stChatInput"]::after {
+        content: "Nova is an AI assistant and may make mistakes. Please verify critical information before taking action.";
+        position: absolute;
+        bottom: 0px;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-size: 0.75rem;
+        color: #888888;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -415,11 +430,3 @@ if is_new_message:
     st.session_state.local_active_history = active_history
 
     st.rerun()
-
-# ==========================================
-# DISCLAIMER FOOTER (NOW PLACED AT THE VERY BOTTOM UNDER THE CHAT INPUT)
-# ==========================================
-st.markdown(
-    "<div style='text-align: center; font-size: 0.75rem; color: #888888; margin-top: 5px; margin-bottom: 5px;'>Nova is an AI assistant and may make mistakes. Please verify critical information before taking action.</div>", 
-    unsafe_allow_html=True
-)
