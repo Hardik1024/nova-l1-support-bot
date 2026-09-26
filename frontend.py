@@ -21,26 +21,30 @@ st.set_page_config(page_title="Nova Support", page_icon="💠", layout="wide")
 
 st.markdown("""
 <style>
-    .stApp {
-        background: linear-gradient(180deg, var(--secondary-background-color) 0%, var(--background-color) 60%);
+    .stApp { 
+        background: linear-gradient(180deg, var(--secondary-background-color) 0%, var(--background-color) 60%); 
     }
-    .block-container {
-        padding-top: 3rem;
+    .block-container { 
+        padding-top: 3rem; 
     }
     
-    /* --- CSS HACK: INJECT DISCLAIMER UNDER CHAT INPUT --- */
-    [data-testid="stChatInput"] {
-        padding-bottom: 25px !important;
+    /* --- CSS HACK: MOBILE-RESPONSIVE DISCLAIMER --- */
+    [data-testid="stChatInput"] { 
+        /* Increased from 25px to 45px to comfortably fit 2 lines on phones */
+        padding-bottom: 45px !important; 
     }
     [data-testid="stChatInput"]::after {
         content: "Nova is an AI assistant and may make mistakes. Please verify critical information before taking action.";
-        position: absolute;
-        bottom: 0px;
-        left: 0;
-        right: 0;
-        text-align: center;
-        font-size: 0.75rem;
+        position: absolute; 
+        bottom: 12px; /* Lifted slightly off the absolute bottom */
+        left: 0; 
+        right: 0; 
+        text-align: center; 
+        font-size: 0.70rem; /* Slightly smaller to fit better on mobile */
         color: #888888;
+        line-height: 1.3; /* Better vertical spacing between the two lines */
+        padding-left: 15px; /* Keeps text away from the left edge on phones */
+        padding-right: 15px; /* Keeps text away from the right edge on phones */
     }
 </style>
 """, unsafe_allow_html=True)
