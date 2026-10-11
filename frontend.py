@@ -101,7 +101,6 @@ def delete_user_chats(user_id):
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
 def get_chat_separator_time(iso_string):
-    """Generates the centered 'Today 1:09 PM' separator"""
     if not iso_string: return ""
     try:
         dt = datetime.datetime.fromisoformat(iso_string)
@@ -151,13 +150,15 @@ elif "chat_id" in st.query_params:
     del st.query_params["chat_id"]
 
 # ==========================================
-# SIDEBAR (CLEAN, NATIVE STREAMLIT)
+# SIDEBAR (CLEAN & CACHE-WIPING)
 # ==========================================
 with st.sidebar:
     st.title("💠 Nova")
 
     if st.button("+ New Chat", use_container_width=True):
         st.session_state.current_chat_id = None
+        st.session_state.local_active_id = None # Wipes ghost memory for smooth transitions
+        st.session_state.local_active_history = []
         if "chat_id" in st.query_params:
             del st.query_params["chat_id"]
         
@@ -182,6 +183,8 @@ with st.sidebar:
         with col1:
             if st.button(chat_name, key=f"chat_{chat_id}", use_container_width=True):
                 st.session_state.current_chat_id = chat_id
+                st.session_state.local_active_id = None # Wipes ghost memory
+                st.session_state.local_active_history = []
                 st.query_params["chat_id"] = chat_id
                 st.rerun()
         with col2:
@@ -190,6 +193,8 @@ with st.sidebar:
                 del chats_dictionary[chat_id]
                 if st.session_state.current_chat_id == chat_id:
                     st.session_state.current_chat_id = None
+                    st.session_state.local_active_id = None
+                    st.session_state.local_active_history = []
                     if "chat_id" in st.query_params:
                         del st.query_params["chat_id"]
                 st.rerun()
@@ -217,56 +222,67 @@ if active_id and active_id in chats_dictionary:
 else:
     active_history = []
 
-# --- BUG FIX: PREVENT SUPABASE READ DELAY ON FIRST MESSAGE ---
 if "local_active_history" in st.session_state and st.session_state.local_active_id == active_id:
     if len(st.session_state.local_active_history) > len(active_history):
         active_history = st.session_state.local_active_history
 
+# Grab user input early so we can bypass drawing the welcome screen
 user_input = st.chat_input("Ask Nova", accept_file=True, file_type=["pdf", "docx", "png", "jpg", "jpeg", "webp"])
 
 # ==========================================
-# UI CONTAINERS & CHATGPT DATE SEPARATOR
+# UI CONTAINERS & INSTANT HIDE LOGIC
 # ==========================================
+welcome_placeholder = st.empty()
 chat_box = st.container()
+pills_placeholder = st.empty()
 
 suggestion_clicked = None
 prompt_clicked = None
 
-if not active_history:
-    _, center_col, _ = st.columns([1, 3, 1])
-    with center_col:
-        st.markdown("<br><br><br>", unsafe_allow_html=True)
-        st.markdown("<h2 style='text-align: center; font-size: 2.2rem; margin-bottom: 5px;'>How can I help you today?</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; font-size: 1.05rem; margin-top: 0px; opacity: 0.7;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
+# Only draw welcome screen if there is no history AND the user hasn't typed anything
+if not active_history and not user_input:
+    with welcome_placeholder.container():
+        _, center_col, _ = st.columns([1, 3, 1])
+        with center_col:
+            st.markdown("<br><br><br>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; font-size: 2.2rem; margin-bottom: 5px;'>How can I help you today?</h2>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; font-size: 1.05rem; margin-top: 0px; opacity: 0.7;'>Ask me to troubleshoot IT issues, run system diagnostics, or manage your Jira tickets.</p>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
 
-        prompts = st.session_state.welcome_prompts
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button(prompts[0], use_container_width=True): prompt_clicked = prompts[0]
-            if st.button(prompts[2], use_container_width=True): prompt_clicked = prompts[2]
-        with c2:
-            if st.button(prompts[1], use_container_width=True): prompt_clicked = prompts[1]
-            if st.button(prompts[3], use_container_width=True): prompt_clicked = prompts[3]
+            prompts = st.session_state.welcome_prompts
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button(prompts[0], use_container_width=True): prompt_clicked = prompts[0]
+                if st.button(prompts[2], use_container_width=True): prompt_clicked = prompts[2]
+            with c2:
+                if st.button(prompts[1], use_container_width=True): prompt_clicked = prompts[1]
+                if st.button(prompts[3], use_container_width=True): prompt_clicked = prompts[3]
 
+# Only draw pills if the user hasn't typed anything yet
 if not user_input and active_history and active_history[-1]["role"] == "assistant":
     last_msg = active_history[-1]["content"]
     if "===SUGGESTIONS===" in last_msg:
         sug_text = last_msg.split("===SUGGESTIONS===")[1].strip()
         suggestions = [s.strip("- 1234567890.*") for s in sug_text.split("\n") if s.strip()]
         if suggestions:
-            st.markdown("<br>", unsafe_allow_html=True)
-            selection = st.pills("Quick Replies:", options=suggestions, label_visibility="collapsed", key=f"pills_{len(active_history)}")
-            if selection:
-                suggestion_clicked = selection
+            with pills_placeholder.container():
+                st.markdown("<br>", unsafe_allow_html=True)
+                selection = st.pills("Quick Replies:", options=suggestions, label_visibility="collapsed", key=f"pills_{len(active_history)}")
+                if selection:
+                    suggestion_clicked = selection
 
 is_new_message = bool(user_input or suggestion_clicked or prompt_clicked)
 
+# If a button/pill was clicked, instantly erase them from the screen before the AI thinks
+if prompt_clicked:
+    welcome_placeholder.empty()
+if suggestion_clicked:
+    pills_placeholder.empty()
+
+# Draw existing history
 with chat_box:
     last_date = None
-    
     for msg in active_history:
-        # --- CHATGPT STYLE DATE SEPARATOR ---
         if "timestamp" in msg:
             try:
                 msg_dt = datetime.datetime.fromisoformat(msg["timestamp"]).date()
